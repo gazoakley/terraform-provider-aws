@@ -2,14 +2,64 @@ package aws
 
 import (
 	"fmt"
+	"log"
 	"testing"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/ecs"
-	"github.com/hashicorp/terraform/helper/acctest"
-	"github.com/hashicorp/terraform/helper/resource"
-	"github.com/hashicorp/terraform/terraform"
+	"github.com/hashicorp/terraform-plugin-sdk/helper/acctest"
+	"github.com/hashicorp/terraform-plugin-sdk/helper/resource"
+	"github.com/hashicorp/terraform-plugin-sdk/terraform"
 )
+
+func init() {
+	resource.AddTestSweepers("aws_ecs_cluster", &resource.Sweeper{
+		Name: "aws_ecs_cluster",
+		F:    testSweepEcsClusters,
+		Dependencies: []string{
+			"aws_ecs_service",
+		},
+	})
+}
+
+func testSweepEcsClusters(region string) error {
+	client, err := sharedClientForRegion(region)
+	if err != nil {
+		return fmt.Errorf("error getting client: %s", err)
+	}
+	conn := client.(*AWSClient).ecsconn
+
+	err = conn.ListClustersPages(&ecs.ListClustersInput{}, func(page *ecs.ListClustersOutput, isLast bool) bool {
+		if page == nil {
+			return !isLast
+		}
+
+		for _, clusterARNPtr := range page.ClusterArns {
+			input := &ecs.DeleteClusterInput{
+				Cluster: clusterARNPtr,
+			}
+			clusterARN := aws.StringValue(clusterARNPtr)
+
+			log.Printf("[INFO] Deleting ECS Cluster: %s", clusterARN)
+			_, err = conn.DeleteCluster(input)
+
+			if err != nil {
+				log.Printf("[ERROR] Error deleting ECS Cluster (%s): %s", clusterARN, err)
+			}
+		}
+
+		return !isLast
+	})
+	if err != nil {
+		if testSweepSkipSweepError(err) {
+			log.Printf("[WARN] Skipping ECS Cluster sweep for %s: %s", region, err)
+			return nil
+		}
+		return fmt.Errorf("error retrieving ECS Clusters: %s", err)
+	}
+
+	return nil
+}
 
 func TestAccAWSEcsCluster_basic(t *testing.T) {
 	var cluster1 ecs.Cluster
@@ -101,6 +151,47 @@ func TestAccAWSEcsCluster_Tags(t *testing.T) {
 					testAccCheckAWSEcsClusterExists(resourceName, &cluster1),
 					resource.TestCheckResourceAttr(resourceName, "tags.%", "1"),
 					resource.TestCheckResourceAttr(resourceName, "tags.key2", "value2"),
+				),
+			},
+		},
+	})
+}
+
+func TestAccAWSEcsCluster_containerInsights(t *testing.T) {
+	var cluster1 ecs.Cluster
+	rName := acctest.RandomWithPrefix("tf-acc-test")
+	resourceName := "aws_ecs_cluster.test"
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:     func() { testAccPreCheck(t) },
+		Providers:    testAccProviders,
+		CheckDestroy: testAccCheckAWSEcsClusterDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccAWSEcsClusterConfig(rName),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckAWSEcsClusterExists(resourceName, &cluster1),
+					testAccCheckResourceAttrRegionalARN(resourceName, "arn", "ecs", fmt.Sprintf("cluster/%s", rName)),
+				),
+			},
+			{
+				Config: testAccAWSEcsClusterConfigContainerInsights(rName),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckAWSEcsClusterExists(resourceName, &cluster1),
+					testAccCheckResourceAttrRegionalARN(resourceName, "arn", "ecs", fmt.Sprintf("cluster/%s", rName)),
+					resource.TestCheckResourceAttr(resourceName, "name", rName),
+					resource.TestCheckResourceAttr(resourceName, "setting.#", "1"),
+					resource.TestCheckResourceAttr(resourceName, "setting.4047805881.name", "containerInsights"),
+					resource.TestCheckResourceAttr(resourceName, "setting.4047805881.value", "enabled"),
+				),
+			},
+			{
+				Config: testAccAWSEcsClusterConfigContainerInsightsDisable(rName),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckAWSEcsClusterExists(resourceName, &cluster1),
+					resource.TestCheckResourceAttr(resourceName, "setting.#", "1"),
+					resource.TestCheckResourceAttr(resourceName, "setting.1157067080.name", "containerInsights"),
+					resource.TestCheckResourceAttr(resourceName, "setting.1157067080.value", "disabled"),
 				),
 			},
 		},
@@ -211,4 +302,28 @@ resource "aws_ecs_cluster" "test" {
   }
 }
 `, rName, tag1Key, tag1Value, tag2Key, tag2Value)
+}
+
+func testAccAWSEcsClusterConfigContainerInsights(rName string) string {
+	return fmt.Sprintf(`
+resource "aws_ecs_cluster" "test" {
+  name = %q
+  setting {
+	name = "containerInsights"
+	value = "enabled"
+  }
+}
+`, rName)
+}
+
+func testAccAWSEcsClusterConfigContainerInsightsDisable(rName string) string {
+	return fmt.Sprintf(`
+resource "aws_ecs_cluster" "test" {
+  name = %q
+  setting {
+	name = "containerInsights"
+	value = "disabled"
+  }
+}
+`, rName)
 }

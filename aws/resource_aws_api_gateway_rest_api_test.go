@@ -3,15 +3,14 @@ package aws
 import (
 	"fmt"
 	"log"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/apigateway"
-	"github.com/hashicorp/terraform/helper/acctest"
-	"github.com/hashicorp/terraform/helper/resource"
-	"github.com/hashicorp/terraform/terraform"
+	"github.com/hashicorp/terraform-plugin-sdk/helper/acctest"
+	"github.com/hashicorp/terraform-plugin-sdk/helper/resource"
+	"github.com/hashicorp/terraform-plugin-sdk/terraform"
 )
 
 func init() {
@@ -28,27 +27,8 @@ func testSweepAPIGatewayRestApis(region string) error {
 	}
 	conn := client.(*AWSClient).apigateway
 
-	// https://github.com/terraform-providers/terraform-provider-aws/issues/3808
-	prefixes := []string{
-		"test",
-		"tf_acc_",
-		"tf-acc-",
-	}
-
 	err = conn.GetRestApisPages(&apigateway.GetRestApisInput{}, func(page *apigateway.GetRestApisOutput, lastPage bool) bool {
 		for _, item := range page.Items {
-			skip := true
-			for _, prefix := range prefixes {
-				if strings.HasPrefix(*item.Name, prefix) {
-					skip = false
-					break
-				}
-			}
-			if skip {
-				log.Printf("[INFO] Skipping API Gateway REST API: %s", *item.Name)
-				continue
-			}
-
 			input := &apigateway.DeleteRestApiInput{
 				RestApiId: item.Id,
 			}
@@ -136,6 +116,27 @@ func TestAccAWSAPIGatewayRestApi_basic(t *testing.T) {
 					testAccCheckAWSAPIGatewayRestAPIMinimumCompressionSizeAttributeIsNil(&conf),
 					resource.TestCheckResourceAttr("aws_api_gateway_rest_api.test", "minimum_compression_size", "-1"),
 				),
+			},
+		},
+	})
+}
+
+func TestAccAWSAPIGatewayRestApi_disappears(t *testing.T) {
+	var restApi apigateway.RestApi
+	resourceName := "aws_api_gateway_rest_api.test"
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:     func() { testAccPreCheck(t) },
+		Providers:    testAccProviders,
+		CheckDestroy: testAccCheckAWSAPIGatewayRestAPIDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccAWSAPIGatewayRestAPIConfig,
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckAWSAPIGatewayRestAPIExists(resourceName, &restApi),
+					testAccCheckAWSAPIGatewayRestAPIDisappears(&restApi),
+				),
+				ExpectNonEmptyPlan: true,
 			},
 		},
 	})
@@ -506,6 +507,20 @@ func testAccCheckAWSAPIGatewayRestAPIDestroy(s *terraform.State) error {
 	}
 
 	return nil
+}
+
+func testAccCheckAWSAPIGatewayRestAPIDisappears(restApi *apigateway.RestApi) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		conn := testAccProvider.Meta().(*AWSClient).apigateway
+
+		input := &apigateway.DeleteRestApiInput{
+			RestApiId: restApi.Id,
+		}
+
+		_, err := conn.DeleteRestApi(input)
+
+		return err
+	}
 }
 
 const testAccAWSAPIGatewayRestAPIConfig = `

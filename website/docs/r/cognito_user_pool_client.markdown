@@ -1,12 +1,12 @@
 ---
+subcategory: "Cognito"
 layout: "aws"
 page_title: "AWS: aws_cognito_user_pool_client"
-sidebar_current: "docs-aws-resource-cognito-user-pool-client"
 description: |-
   Provides a Cognito User Pool Client resource.
 ---
 
-# aws_cognito_user_pool_client
+# Resource: aws_cognito_user_pool_client
 
 Provides a Cognito User Pool Client resource.
 
@@ -52,7 +52,7 @@ The following arguments are supported:
 * `callback_urls` - (Optional) List of allowed callback URLs for the identity providers.
 * `default_redirect_uri` - (Optional) The default redirect URI. Must be in the list of callback URLs.
 * `explicit_auth_flows` - (Optional) List of authentication flows (ADMIN_NO_SRP_AUTH, CUSTOM_AUTH_FLOW_ONLY, USER_PASSWORD_AUTH).
-* `generate_secret` - (Optional) Should an application secret be generated. AWS JavaScript SDK requires this to be false.
+* `generate_secret` - (Optional) Should an application secret be generated.
 * `logout_urls` - (Optional) List of allowed logout URLs for the identity providers.
 * `name` - (Required) The name of the application client.
 * `read_attributes` - (Optional) List of user pool attributes the application client can read from.

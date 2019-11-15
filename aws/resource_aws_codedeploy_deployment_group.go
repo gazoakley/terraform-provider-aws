@@ -9,10 +9,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hashicorp/terraform/helper/hashcode"
-	"github.com/hashicorp/terraform/helper/resource"
-	"github.com/hashicorp/terraform/helper/schema"
-	"github.com/hashicorp/terraform/helper/validation"
+	"github.com/hashicorp/terraform-plugin-sdk/helper/hashcode"
+	"github.com/hashicorp/terraform-plugin-sdk/helper/resource"
+	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/helper/validation"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
@@ -555,8 +555,11 @@ func resourceAwsCodeDeployDeploymentGroupCreate(d *schema.ResourceData, meta int
 		return handleCreateError(err)
 	})
 
+	if isResourceTimeoutError(err) {
+		resp, err = conn.CreateDeploymentGroup(&input)
+	}
 	if err != nil {
-		return err
+		return fmt.Errorf("Error creating CodeDeploy deployment group: %s", err)
 	}
 
 	d.SetId(*resp.DeploymentGroupId)
@@ -732,8 +735,11 @@ func resourceAwsCodeDeployDeploymentGroupUpdate(d *schema.ResourceData, meta int
 		return handleUpdateError(err)
 	})
 
+	if isResourceTimeoutError(err) {
+		_, err = conn.UpdateDeploymentGroup(&input)
+	}
 	if err != nil {
-		return err
+		return fmt.Errorf("Error updating CodeDeploy deployment group: %s", err)
 	}
 
 	return resourceAwsCodeDeployDeploymentGroupRead(d, meta)
@@ -748,11 +754,7 @@ func resourceAwsCodeDeployDeploymentGroupDelete(d *schema.ResourceData, meta int
 		DeploymentGroupName: aws.String(d.Get("deployment_group_name").(string)),
 	})
 
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return err
 }
 
 func handleCreateError(err error) *resource.RetryError {
@@ -1193,7 +1195,7 @@ func autoRollbackConfigToMap(config *codedeploy.AutoRollbackConfiguration) []map
 
 	// only create configurations that are enabled or temporarily disabled (retaining events)
 	// otherwise empty configurations will be created
-	if config != nil && (*config.Enabled == true || len(config.Events) > 0) {
+	if config != nil && (*config.Enabled || len(config.Events) > 0) {
 		item := make(map[string]interface{})
 		item["enabled"] = *config.Enabled
 		item["events"] = schema.NewSet(schema.HashString, flattenStringList(config.Events))
@@ -1210,7 +1212,7 @@ func alarmConfigToMap(config *codedeploy.AlarmConfiguration) []map[string]interf
 
 	// only create configurations that are enabled or temporarily disabled (retaining alarms)
 	// otherwise empty configurations will be created
-	if config != nil && (*config.Enabled == true || len(config.Alarms) > 0) {
+	if config != nil && (*config.Enabled || len(config.Alarms) > 0) {
 		names := make([]*string, 0, len(config.Alarms))
 		for _, alarm := range config.Alarms {
 			names = append(names, alarm.Name)
@@ -1426,8 +1428,7 @@ func resourceAwsCodeDeployTagSetHash(v interface{}) int {
 	filterSet := tagSetMap["ec2_tag_filter"]
 	filterSetSlice := filterSet.(*schema.Set).List()
 
-	var x uint64
-	x = 1
+	var x uint64 = 1
 	for i, filter := range filterSetSlice {
 		x = ((x << 7) | (x >> (64 - 7))) ^ uint64(i) ^ uint64(resourceAwsCodeDeployTagFilterHash(filter))
 	}

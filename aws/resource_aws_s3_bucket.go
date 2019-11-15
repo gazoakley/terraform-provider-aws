@@ -15,11 +15,11 @@ import (
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/endpoints"
 	"github.com/aws/aws-sdk-go/service/s3"
-	"github.com/hashicorp/terraform/helper/hashcode"
-	"github.com/hashicorp/terraform/helper/resource"
-	"github.com/hashicorp/terraform/helper/schema"
-	"github.com/hashicorp/terraform/helper/structure"
-	"github.com/hashicorp/terraform/helper/validation"
+	"github.com/hashicorp/terraform-plugin-sdk/helper/hashcode"
+	"github.com/hashicorp/terraform-plugin-sdk/helper/resource"
+	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/helper/structure"
+	"github.com/hashicorp/terraform-plugin-sdk/helper/validation"
 )
 
 func resourceAwsS3Bucket() *schema.Resource {
@@ -39,12 +39,14 @@ func resourceAwsS3Bucket() *schema.Resource {
 				Computed:      true,
 				ForceNew:      true,
 				ConflictsWith: []string{"bucket_prefix"},
+				ValidateFunc:  validation.StringLenBetween(0, 63),
 			},
 			"bucket_prefix": {
 				Type:          schema.TypeString,
 				Optional:      true,
 				ForceNew:      true,
 				ConflictsWith: []string{"bucket"},
+				ValidateFunc:  validation.StringLenBetween(0, 63-resource.UniqueIDSuffixLength),
 			},
 
 			"bucket_domain_name": {
@@ -243,6 +245,7 @@ func resourceAwsS3Bucket() *schema.Resource {
 							Type:     schema.TypeSet,
 							Optional: true,
 							Set:      expirationHash,
+							MaxItems: 1,
 							Elem: &schema.Resource{
 								Schema: map[string]*schema.Schema{
 									"date": {
@@ -264,6 +267,7 @@ func resourceAwsS3Bucket() *schema.Resource {
 						},
 						"noncurrent_version_expiration": {
 							Type:     schema.TypeSet,
+							MaxItems: 1,
 							Optional: true,
 							Set:      expirationHash,
 							Elem: &schema.Resource{
@@ -398,6 +402,7 @@ func resourceAwsS3Bucket() *schema.Resource {
 														s3.StorageClassOnezoneIa,
 														s3.StorageClassIntelligentTiering,
 														s3.StorageClassGlacier,
+														s3.StorageClassDeepArchive,
 													}, false),
 												},
 												"replica_kms_key_id": {
@@ -530,6 +535,64 @@ func resourceAwsS3Bucket() *schema.Resource {
 				},
 			},
 
+			"object_lock_configuration": {
+				Type:     schema.TypeList,
+				Optional: true,
+				MaxItems: 1,
+				Elem: &schema.Resource{
+					Schema: map[string]*schema.Schema{
+						"object_lock_enabled": {
+							Type:     schema.TypeString,
+							Required: true,
+							ForceNew: true,
+							ValidateFunc: validation.StringInSlice([]string{
+								s3.ObjectLockEnabledEnabled,
+							}, false),
+						},
+
+						"rule": {
+							Type:     schema.TypeList,
+							Optional: true,
+							MaxItems: 1,
+							Elem: &schema.Resource{
+								Schema: map[string]*schema.Schema{
+									"default_retention": {
+										Type:     schema.TypeList,
+										Required: true,
+										MinItems: 1,
+										MaxItems: 1,
+										Elem: &schema.Resource{
+											Schema: map[string]*schema.Schema{
+												"mode": {
+													Type:     schema.TypeString,
+													Required: true,
+													ValidateFunc: validation.StringInSlice([]string{
+														s3.ObjectLockRetentionModeGovernance,
+														s3.ObjectLockRetentionModeCompliance,
+													}, false),
+												},
+
+												"days": {
+													Type:         schema.TypeInt,
+													Optional:     true,
+													ValidateFunc: validation.IntAtLeast(1),
+												},
+
+												"years": {
+													Type:         schema.TypeInt,
+													Optional:     true,
+													ValidateFunc: validation.IntAtLeast(1),
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+
 			"tags": tagsSchema(),
 		},
 	}
@@ -577,6 +640,12 @@ func resourceAwsS3BucketCreate(d *schema.ResourceData, meta interface{}) error {
 		return fmt.Errorf("Error validating S3 bucket name: %s", err)
 	}
 
+	// S3 Object Lock can only be enabled on bucket creation.
+	objectLockConfiguration := expandS3ObjectLockConfiguration(d.Get("object_lock_configuration").([]interface{}))
+	if objectLockConfiguration != nil && aws.StringValue(objectLockConfiguration.ObjectLockEnabled) == s3.ObjectLockEnabledEnabled {
+		req.ObjectLockEnabledForBucket = aws.Bool(true)
+	}
+
 	err := resource.Retry(5*time.Minute, func() *resource.RetryError {
 		log.Printf("[DEBUG] Trying to create new S3 bucket: %q", bucket)
 		_, err := s3conn.CreateBucket(req)
@@ -584,8 +653,7 @@ func resourceAwsS3BucketCreate(d *schema.ResourceData, meta interface{}) error {
 			if awsErr.Code() == "OperationAborted" {
 				log.Printf("[WARN] Got an error while trying to create S3 bucket %s: %s", bucket, err)
 				return resource.RetryableError(
-					fmt.Errorf("Error creating S3 bucket %s, retrying: %s",
-						bucket, err))
+					fmt.Errorf("Error creating S3 bucket %s, retrying: %s", bucket, err))
 			}
 		}
 		if err != nil {
@@ -594,7 +662,9 @@ func resourceAwsS3BucketCreate(d *schema.ResourceData, meta interface{}) error {
 
 		return nil
 	})
-
+	if isResourceTimeoutError(err) {
+		_, err = s3conn.CreateBucket(req)
+	}
 	if err != nil {
 		return fmt.Errorf("Error creating S3 bucket: %s", err)
 	}
@@ -606,7 +676,7 @@ func resourceAwsS3BucketCreate(d *schema.ResourceData, meta interface{}) error {
 
 func resourceAwsS3BucketUpdate(d *schema.ResourceData, meta interface{}) error {
 	s3conn := meta.(*AWSClient).s3conn
-	if err := setTagsS3(s3conn, d); err != nil {
+	if err := setTagsS3Bucket(s3conn, d); err != nil {
 		return fmt.Errorf("%q: %s", d.Get("bucket").(string), err)
 	}
 
@@ -675,6 +745,12 @@ func resourceAwsS3BucketUpdate(d *schema.ResourceData, meta interface{}) error {
 		}
 	}
 
+	if d.HasChange("object_lock_configuration") {
+		if err := resourceAwsS3BucketObjectLockConfigurationUpdate(s3conn, d); err != nil {
+			return err
+		}
+	}
+
 	return resourceAwsS3BucketRead(d, meta)
 }
 
@@ -683,7 +759,7 @@ func resourceAwsS3BucketRead(d *schema.ResourceData, meta interface{}) error {
 
 	var err error
 
-	_, err = retryOnAwsCode("NoSuchBucket", func() (interface{}, error) {
+	_, err = retryOnAwsCode(s3.ErrCodeNoSuchBucket, func() (interface{}, error) {
 		return s3conn.HeadBucket(&s3.HeadBucketInput{
 			Bucket: aws.String(d.Id()),
 		})
@@ -707,7 +783,7 @@ func resourceAwsS3BucketRead(d *schema.ResourceData, meta interface{}) error {
 	// Read the policy
 	if _, ok := d.GetOk("policy"); ok {
 
-		pol, err := retryOnAwsCode("NoSuchBucket", func() (interface{}, error) {
+		pol, err := retryOnAwsCode(s3.ErrCodeNoSuchBucket, func() (interface{}, error) {
 			return s3conn.GetBucketPolicy(&s3.GetBucketPolicyInput{
 				Bucket: aws.String(d.Id()),
 			})
@@ -733,7 +809,7 @@ func resourceAwsS3BucketRead(d *schema.ResourceData, meta interface{}) error {
 	}
 
 	// Read the CORS
-	corsResponse, err := retryOnAwsCode("NoSuchBucket", func() (interface{}, error) {
+	corsResponse, err := retryOnAwsCode(s3.ErrCodeNoSuchBucket, func() (interface{}, error) {
 		return s3conn.GetBucketCors(&s3.GetBucketCorsInput{
 			Bucket: aws.String(d.Id()),
 		})
@@ -765,7 +841,7 @@ func resourceAwsS3BucketRead(d *schema.ResourceData, meta interface{}) error {
 	}
 
 	// Read the website configuration
-	wsResponse, err := retryOnAwsCode("NoSuchBucket", func() (interface{}, error) {
+	wsResponse, err := retryOnAwsCode(s3.ErrCodeNoSuchBucket, func() (interface{}, error) {
 		return s3conn.GetBucketWebsite(&s3.GetBucketWebsiteInput{
 			Bucket: aws.String(d.Id()),
 		})
@@ -832,7 +908,7 @@ func resourceAwsS3BucketRead(d *schema.ResourceData, meta interface{}) error {
 
 	// Read the versioning configuration
 
-	versioningResponse, err := retryOnAwsCode("NoSuchBucket", func() (interface{}, error) {
+	versioningResponse, err := retryOnAwsCode(s3.ErrCodeNoSuchBucket, func() (interface{}, error) {
 		return s3conn.GetBucketVersioning(&s3.GetBucketVersioningInput{
 			Bucket: aws.String(d.Id()),
 		})
@@ -863,7 +939,7 @@ func resourceAwsS3BucketRead(d *schema.ResourceData, meta interface{}) error {
 
 	// Read the acceleration status
 
-	accelerateResponse, err := retryOnAwsCode("NoSuchBucket", func() (interface{}, error) {
+	accelerateResponse, err := retryOnAwsCode(s3.ErrCodeNoSuchBucket, func() (interface{}, error) {
 		return s3conn.GetBucketAccelerateConfiguration(&s3.GetBucketAccelerateConfigurationInput{
 			Bucket: aws.String(d.Id()),
 		})
@@ -879,7 +955,7 @@ func resourceAwsS3BucketRead(d *schema.ResourceData, meta interface{}) error {
 
 	// Read the request payer configuration.
 
-	payerResponse, err := retryOnAwsCode("NoSuchBucket", func() (interface{}, error) {
+	payerResponse, err := retryOnAwsCode(s3.ErrCodeNoSuchBucket, func() (interface{}, error) {
 		return s3conn.GetBucketRequestPayment(&s3.GetBucketRequestPaymentInput{
 			Bucket: aws.String(d.Id()),
 		})
@@ -894,7 +970,7 @@ func resourceAwsS3BucketRead(d *schema.ResourceData, meta interface{}) error {
 	}
 
 	// Read the logging configuration
-	loggingResponse, err := retryOnAwsCode("NoSuchBucket", func() (interface{}, error) {
+	loggingResponse, err := retryOnAwsCode(s3.ErrCodeNoSuchBucket, func() (interface{}, error) {
 		return s3conn.GetBucketLogging(&s3.GetBucketLoggingInput{
 			Bucket: aws.String(d.Id()),
 		})
@@ -922,7 +998,7 @@ func resourceAwsS3BucketRead(d *schema.ResourceData, meta interface{}) error {
 
 	// Read the lifecycle configuration
 
-	lifecycleResponse, err := retryOnAwsCode("NoSuchBucket", func() (interface{}, error) {
+	lifecycleResponse, err := retryOnAwsCode(s3.ErrCodeNoSuchBucket, func() (interface{}, error) {
 		return s3conn.GetBucketLifecycleConfiguration(&s3.GetBucketLifecycleConfigurationInput{
 			Bucket: aws.String(d.Id()),
 		})
@@ -936,6 +1012,7 @@ func resourceAwsS3BucketRead(d *schema.ResourceData, meta interface{}) error {
 		lifecycleRules = make([]map[string]interface{}, 0, len(lifecycle.Rules))
 
 		for _, lifecycleRule := range lifecycle.Rules {
+			log.Printf("[DEBUG] S3 bucket: %s, read lifecycle rule: %v", d.Id(), lifecycleRule)
 			rule := make(map[string]interface{})
 
 			// ID
@@ -957,6 +1034,10 @@ func resourceAwsS3BucketRead(d *schema.ResourceData, meta interface{}) error {
 					// Prefix
 					if filter.Prefix != nil && *filter.Prefix != "" {
 						rule["prefix"] = *filter.Prefix
+					}
+					// Tag
+					if filter.Tag != nil {
+						rule["tags"] = tagsToMapS3([]*s3.Tag{filter.Tag})
 					}
 				}
 			} else {
@@ -1046,7 +1127,7 @@ func resourceAwsS3BucketRead(d *schema.ResourceData, meta interface{}) error {
 
 	// Read the bucket replication configuration
 
-	replicationResponse, err := retryOnAwsCode("NoSuchBucket", func() (interface{}, error) {
+	replicationResponse, err := retryOnAwsCode(s3.ErrCodeNoSuchBucket, func() (interface{}, error) {
 		return s3conn.GetBucketReplication(&s3.GetBucketReplicationInput{
 			Bucket: aws.String(d.Id()),
 		})
@@ -1065,7 +1146,7 @@ func resourceAwsS3BucketRead(d *schema.ResourceData, meta interface{}) error {
 
 	// Read the bucket server side encryption configuration
 
-	encryptionResponse, err := retryOnAwsCode("NoSuchBucket", func() (interface{}, error) {
+	encryptionResponse, err := retryOnAwsCode(s3.ErrCodeNoSuchBucket, func() (interface{}, error) {
 		return s3conn.GetBucketEncryption(&s3.GetBucketEncryptionInput{
 			Bucket: aws.String(d.Id()),
 		})
@@ -1082,9 +1163,18 @@ func resourceAwsS3BucketRead(d *schema.ResourceData, meta interface{}) error {
 		return fmt.Errorf("error setting server_side_encryption_configuration: %s", err)
 	}
 
+	// Object Lock configuration.
+	if conf, err := readS3ObjectLockConfiguration(s3conn, d.Id()); err != nil {
+		return fmt.Errorf("error getting S3 Bucket Object Lock configuration: %s", err)
+	} else {
+		if err := d.Set("object_lock_configuration", conf); err != nil {
+			return fmt.Errorf("error setting object_lock_configuration: %s", err)
+		}
+	}
+
 	// Add the region as an attribute
 
-	locationResponse, err := retryOnAwsCode("NoSuchBucket", func() (interface{}, error) {
+	locationResponse, err := retryOnAwsCode(s3.ErrCodeNoSuchBucket, func() (interface{}, error) {
 		return s3conn.GetBucketLocation(
 			&s3.GetBucketLocationInput{
 				Bucket: aws.String(d.Id()),
@@ -1133,9 +1223,9 @@ func resourceAwsS3BucketRead(d *schema.ResourceData, meta interface{}) error {
 		}
 	}
 
-	tagSet, err := getTagSetS3(s3conn, d.Id())
+	tagSet, err := getTagSetS3Bucket(s3conn, d.Id())
 	if err != nil {
-		return err
+		return fmt.Errorf("error getting S3 bucket tags: %s", err)
 	}
 
 	if err := d.Set("tags", tagsToMapS3(tagSet)); err != nil {
@@ -1166,52 +1256,25 @@ func resourceAwsS3BucketDelete(d *schema.ResourceData, meta interface{}) error {
 
 	if isAWSErr(err, "BucketNotEmpty", "") {
 		if d.Get("force_destroy").(bool) {
+			// Use a S3 service client that can handle multiple slashes in URIs.
+			// While aws_s3_bucket_object resources cannot create these object
+			// keys, other AWS services and applications using the S3 Bucket can.
+			s3conn = meta.(*AWSClient).s3connUriCleaningDisabled
+
 			// bucket may have things delete them
 			log.Printf("[DEBUG] S3 Bucket attempting to forceDestroy %+v", err)
 
-			bucket := d.Get("bucket").(string)
-			resp, err := s3conn.ListObjectVersions(
-				&s3.ListObjectVersionsInput{
-					Bucket: aws.String(bucket),
-				},
-			)
+			// Delete everything including locked objects.
+			// Don't ignore any object errors or we could recurse infinitely.
+			var objectLockEnabled bool
+			objectLockConfiguration := expandS3ObjectLockConfiguration(d.Get("object_lock_configuration").([]interface{}))
+			if objectLockConfiguration != nil {
+				objectLockEnabled = aws.StringValue(objectLockConfiguration.ObjectLockEnabled) == s3.ObjectLockEnabledEnabled
+			}
+			err = deleteAllS3ObjectVersions(s3conn, d.Id(), "", objectLockEnabled, false)
 
 			if err != nil {
-				return fmt.Errorf("Error S3 Bucket list Object Versions err: %s", err)
-			}
-
-			objectsToDelete := make([]*s3.ObjectIdentifier, 0)
-
-			if len(resp.DeleteMarkers) != 0 {
-
-				for _, v := range resp.DeleteMarkers {
-					objectsToDelete = append(objectsToDelete, &s3.ObjectIdentifier{
-						Key:       v.Key,
-						VersionId: v.VersionId,
-					})
-				}
-			}
-
-			if len(resp.Versions) != 0 {
-				for _, v := range resp.Versions {
-					objectsToDelete = append(objectsToDelete, &s3.ObjectIdentifier{
-						Key:       v.Key,
-						VersionId: v.VersionId,
-					})
-				}
-			}
-
-			params := &s3.DeleteObjectsInput{
-				Bucket: aws.String(bucket),
-				Delete: &s3.Delete{
-					Objects: objectsToDelete,
-				},
-			}
-
-			_, err = s3conn.DeleteObjects(params)
-
-			if err != nil {
-				return fmt.Errorf("Error S3 Bucket force_destroy error deleting: %s", err)
+				return fmt.Errorf("error S3 Bucket force_destroy: %s", err)
 			}
 
 			// this line recurses until all objects are deleted or an error is returned
@@ -1239,23 +1302,24 @@ func resourceAwsS3BucketPolicyUpdate(s3conn *s3.S3, d *schema.ResourceData) erro
 		}
 
 		err := resource.Retry(1*time.Minute, func() *resource.RetryError {
-			if _, err := s3conn.PutBucketPolicy(params); err != nil {
-				if awserr, ok := err.(awserr.Error); ok {
-					if awserr.Code() == "MalformedPolicy" || awserr.Code() == "NoSuchBucket" {
-						return resource.RetryableError(awserr)
-					}
-				}
+			_, err := s3conn.PutBucketPolicy(params)
+			if isAWSErr(err, "MalformedPolicy", "") || isAWSErr(err, s3.ErrCodeNoSuchBucket, "") {
+				return resource.RetryableError(err)
+			}
+			if err != nil {
 				return resource.NonRetryableError(err)
 			}
 			return nil
 		})
-
+		if isResourceTimeoutError(err) {
+			_, err = s3conn.PutBucketPolicy(params)
+		}
 		if err != nil {
 			return fmt.Errorf("Error putting S3 policy: %s", err)
 		}
 	} else {
 		log.Printf("[DEBUG] S3 bucket: %s, delete policy: %s", bucket, policy)
-		_, err := retryOnAwsCode("NoSuchBucket", func() (interface{}, error) {
+		_, err := retryOnAwsCode(s3.ErrCodeNoSuchBucket, func() (interface{}, error) {
 			return s3conn.DeleteBucketPolicy(&s3.DeleteBucketPolicyInput{
 				Bucket: aws.String(bucket),
 			})
@@ -1277,7 +1341,7 @@ func resourceAwsS3BucketCorsUpdate(s3conn *s3.S3, d *schema.ResourceData) error 
 		// Delete CORS
 		log.Printf("[DEBUG] S3 bucket: %s, delete CORS", bucket)
 
-		_, err := retryOnAwsCode("NoSuchBucket", func() (interface{}, error) {
+		_, err := retryOnAwsCode(s3.ErrCodeNoSuchBucket, func() (interface{}, error) {
 			return s3conn.DeleteBucketCors(&s3.DeleteBucketCorsInput{
 				Bucket: aws.String(bucket),
 			})
@@ -1324,7 +1388,7 @@ func resourceAwsS3BucketCorsUpdate(s3conn *s3.S3, d *schema.ResourceData) error 
 		}
 		log.Printf("[DEBUG] S3 bucket: %s, put CORS: %#v", bucket, corsInput)
 
-		_, err := retryOnAwsCode("NoSuchBucket", func() (interface{}, error) {
+		_, err := retryOnAwsCode(s3.ErrCodeNoSuchBucket, func() (interface{}, error) {
 			return s3conn.PutBucketCors(corsInput)
 		})
 		if err != nil {
@@ -1415,7 +1479,7 @@ func resourceAwsS3BucketWebsitePut(s3conn *s3.S3, d *schema.ResourceData, websit
 
 	log.Printf("[DEBUG] S3 put bucket website: %#v", putInput)
 
-	_, err := retryOnAwsCode("NoSuchBucket", func() (interface{}, error) {
+	_, err := retryOnAwsCode(s3.ErrCodeNoSuchBucket, func() (interface{}, error) {
 		return s3conn.PutBucketWebsite(putInput)
 	})
 	if err != nil {
@@ -1431,7 +1495,7 @@ func resourceAwsS3BucketWebsiteDelete(s3conn *s3.S3, d *schema.ResourceData) err
 
 	log.Printf("[DEBUG] S3 delete bucket website: %#v", deleteInput)
 
-	_, err := retryOnAwsCode("NoSuchBucket", func() (interface{}, error) {
+	_, err := retryOnAwsCode(s3.ErrCodeNoSuchBucket, func() (interface{}, error) {
 		return s3conn.DeleteBucketWebsite(deleteInput)
 	})
 	if err != nil {
@@ -1455,7 +1519,7 @@ func websiteEndpoint(s3conn *s3.S3, d *schema.ResourceData) (*S3Website, error) 
 
 	// Lookup the region for this bucket
 
-	locationResponse, err := retryOnAwsCode("NoSuchBucket", func() (interface{}, error) {
+	locationResponse, err := retryOnAwsCode(s3.ErrCodeNoSuchBucket, func() (interface{}, error) {
 		return s3conn.GetBucketLocation(
 			&s3.GetBucketLocationInput{
 				Bucket: aws.String(bucket),
@@ -1500,10 +1564,14 @@ func WebsiteEndpoint(bucket string, region string) *S3Website {
 func WebsiteDomainUrl(region string) string {
 	region = normalizeRegion(region)
 
-	// New regions uses different syntax for website endpoints
-	// http://docs.aws.amazon.com/AmazonS3/latest/dev/WebsiteEndpoints.html
+	// Different regions have different syntax for website endpoints
+	// https://docs.aws.amazon.com/AmazonS3/latest/dev/WebsiteEndpoints.html
+	// https://docs.aws.amazon.com/general/latest/gr/rande.html#s3_website_region_endpoints
 	if isOldRegion(region) {
 		return fmt.Sprintf("s3-website-%s.amazonaws.com", region)
+	}
+	if partition, ok := endpoints.PartitionForRegion(endpoints.DefaultPartitions(), region); ok && partition.ID() == endpoints.AwsCnPartitionID {
+		return fmt.Sprintf("s3-website.%s.amazonaws.com.cn", region)
 	}
 	return fmt.Sprintf("s3-website.%s.amazonaws.com", region)
 }
@@ -1538,7 +1606,7 @@ func resourceAwsS3BucketAclUpdate(s3conn *s3.S3, d *schema.ResourceData) error {
 	}
 	log.Printf("[DEBUG] S3 put bucket ACL: %#v", i)
 
-	_, err := retryOnAwsCode("NoSuchBucket", func() (interface{}, error) {
+	_, err := retryOnAwsCode(s3.ErrCodeNoSuchBucket, func() (interface{}, error) {
 		return s3conn.PutBucketAcl(i)
 	})
 	if err != nil {
@@ -1578,7 +1646,7 @@ func resourceAwsS3BucketVersioningUpdate(s3conn *s3.S3, d *schema.ResourceData) 
 	}
 	log.Printf("[DEBUG] S3 put bucket versioning: %#v", i)
 
-	_, err := retryOnAwsCode("NoSuchBucket", func() (interface{}, error) {
+	_, err := retryOnAwsCode(s3.ErrCodeNoSuchBucket, func() (interface{}, error) {
 		return s3conn.PutBucketVersioning(i)
 	})
 	if err != nil {
@@ -1613,7 +1681,7 @@ func resourceAwsS3BucketLoggingUpdate(s3conn *s3.S3, d *schema.ResourceData) err
 	}
 	log.Printf("[DEBUG] S3 put bucket logging: %#v", i)
 
-	_, err := retryOnAwsCode("NoSuchBucket", func() (interface{}, error) {
+	_, err := retryOnAwsCode(s3.ErrCodeNoSuchBucket, func() (interface{}, error) {
 		return s3conn.PutBucketLogging(i)
 	})
 	if err != nil {
@@ -1635,7 +1703,7 @@ func resourceAwsS3BucketAccelerationUpdate(s3conn *s3.S3, d *schema.ResourceData
 	}
 	log.Printf("[DEBUG] S3 put bucket acceleration: %#v", i)
 
-	_, err := retryOnAwsCode("NoSuchBucket", func() (interface{}, error) {
+	_, err := retryOnAwsCode(s3.ErrCodeNoSuchBucket, func() (interface{}, error) {
 		return s3conn.PutBucketAccelerateConfiguration(i)
 	})
 	if err != nil {
@@ -1657,7 +1725,7 @@ func resourceAwsS3BucketRequestPayerUpdate(s3conn *s3.S3, d *schema.ResourceData
 	}
 	log.Printf("[DEBUG] S3 put bucket request payer: %#v", i)
 
-	_, err := retryOnAwsCode("NoSuchBucket", func() (interface{}, error) {
+	_, err := retryOnAwsCode(s3.ErrCodeNoSuchBucket, func() (interface{}, error) {
 		return s3conn.PutBucketRequestPayment(i)
 	})
 	if err != nil {
@@ -1676,12 +1744,7 @@ func resourceAwsS3BucketServerSideEncryptionConfigurationUpdate(s3conn *s3.S3, d
 			Bucket: aws.String(bucket),
 		}
 
-		err := resource.Retry(1*time.Minute, func() *resource.RetryError {
-			if _, err := s3conn.DeleteBucketEncryption(i); err != nil {
-				return resource.NonRetryableError(err)
-			}
-			return nil
-		})
+		_, err := s3conn.DeleteBucketEncryption(i)
 		if err != nil {
 			return fmt.Errorf("error removing S3 bucket server side encryption: %s", err)
 		}
@@ -1719,11 +1782,28 @@ func resourceAwsS3BucketServerSideEncryptionConfigurationUpdate(s3conn *s3.S3, d
 	}
 	log.Printf("[DEBUG] S3 put bucket replication configuration: %#v", i)
 
-	_, err := retryOnAwsCode("NoSuchBucket", func() (interface{}, error) {
+	_, err := retryOnAwsCode(s3.ErrCodeNoSuchBucket, func() (interface{}, error) {
 		return s3conn.PutBucketEncryption(i)
 	})
 	if err != nil {
 		return fmt.Errorf("error putting S3 server side encryption configuration: %s", err)
+	}
+
+	return nil
+}
+
+func resourceAwsS3BucketObjectLockConfigurationUpdate(s3conn *s3.S3, d *schema.ResourceData) error {
+	// S3 Object Lock configuration cannot be deleted, only updated.
+	req := &s3.PutObjectLockConfigurationInput{
+		Bucket:                  aws.String(d.Get("bucket").(string)),
+		ObjectLockConfiguration: expandS3ObjectLockConfiguration(d.Get("object_lock_configuration").([]interface{})),
+	}
+
+	_, err := retryOnAwsCode(s3.ErrCodeNoSuchBucket, func() (interface{}, error) {
+		return s3conn.PutObjectLockConfiguration(req)
+	})
+	if err != nil {
+		return fmt.Errorf("error putting S3 object lock configuration: %s", err)
 	}
 
 	return nil
@@ -1738,12 +1818,7 @@ func resourceAwsS3BucketReplicationConfigurationUpdate(s3conn *s3.S3, d *schema.
 			Bucket: aws.String(bucket),
 		}
 
-		err := resource.Retry(1*time.Minute, func() *resource.RetryError {
-			if _, err := s3conn.DeleteBucketReplication(i); err != nil {
-				return resource.NonRetryableError(err)
-			}
-			return nil
-		})
+		_, err := s3conn.DeleteBucketReplication(i)
 		if err != nil {
 			return fmt.Errorf("Error removing S3 bucket replication: %s", err)
 		}
@@ -1831,7 +1906,7 @@ func resourceAwsS3BucketReplicationConfigurationUpdate(s3conn *s3.S3, d *schema.
 			rcRule.SourceSelectionCriteria = ruleSsc
 		}
 
-		if f, ok := rr["filter"].([]interface{}); ok && len(f) > 0 {
+		if f, ok := rr["filter"].([]interface{}); ok && len(f) > 0 && f[0] != nil {
 			// XML schema V2.
 			rcRule.Priority = aws.Int64(int64(rr["priority"].(int)))
 			rcRule.Filter = &s3.ReplicationRuleFilter{}
@@ -1864,15 +1939,18 @@ func resourceAwsS3BucketReplicationConfigurationUpdate(s3conn *s3.S3, d *schema.
 	log.Printf("[DEBUG] S3 put bucket replication configuration: %#v", i)
 
 	err := resource.Retry(1*time.Minute, func() *resource.RetryError {
-		if _, err := s3conn.PutBucketReplication(i); err != nil {
-			if isAWSErr(err, s3.ErrCodeNoSuchBucket, "") ||
-				isAWSErr(err, "InvalidRequest", "Versioning must be 'Enabled' on the bucket") {
-				return resource.RetryableError(err)
-			}
+		_, err := s3conn.PutBucketReplication(i)
+		if isAWSErr(err, s3.ErrCodeNoSuchBucket, "") || isAWSErr(err, "InvalidRequest", "Versioning must be 'Enabled' on the bucket") {
+			return resource.RetryableError(err)
+		}
+		if err != nil {
 			return resource.NonRetryableError(err)
 		}
 		return nil
 	})
+	if isResourceTimeoutError(err) {
+		_, err = s3conn.PutBucketReplication(i)
+	}
 	if err != nil {
 		return fmt.Errorf("Error putting S3 replication configuration: %s", err)
 	}
@@ -1890,12 +1968,7 @@ func resourceAwsS3BucketLifecycleUpdate(s3conn *s3.S3, d *schema.ResourceData) e
 			Bucket: aws.String(bucket),
 		}
 
-		err := resource.Retry(1*time.Minute, func() *resource.RetryError {
-			if _, err := s3conn.DeleteBucketLifecycle(i); err != nil {
-				return resource.NonRetryableError(err)
-			}
-			return nil
-		})
+		_, err := s3conn.DeleteBucketLifecycle(i)
 		if err != nil {
 			return fmt.Errorf("Error removing S3 lifecycle: %s", err)
 		}
@@ -2026,11 +2099,8 @@ func resourceAwsS3BucketLifecycleUpdate(s3conn *s3.S3, d *schema.ResourceData) e
 		},
 	}
 
-	err := resource.Retry(1*time.Minute, func() *resource.RetryError {
-		if _, err := s3conn.PutBucketLifecycleConfiguration(i); err != nil {
-			return resource.NonRetryableError(err)
-		}
-		return nil
+	_, err := retryOnAwsCode(s3.ErrCodeNoSuchBucket, func() (interface{}, error) {
+		return s3conn.PutBucketLifecycleConfiguration(i)
 	})
 	if err != nil {
 		return fmt.Errorf("Error putting S3 lifecycle: %s", err)
@@ -2182,9 +2252,9 @@ func removeNil(data map[string]interface{}) map[string]interface{} {
 			continue
 		}
 
-		switch v.(type) {
+		switch v := v.(type) {
 		case map[string]interface{}:
-			withoutNil[k] = removeNil(v.(map[string]interface{}))
+			withoutNil[k] = removeNil(v)
 		default:
 			withoutNil[k] = v
 		}
@@ -2369,4 +2439,93 @@ func sourceSseKmsObjectsHash(v interface{}) int {
 
 type S3Website struct {
 	Endpoint, Domain string
+}
+
+//
+// S3 Object Lock functions.
+//
+
+func readS3ObjectLockConfiguration(conn *s3.S3, bucket string) ([]interface{}, error) {
+	resp, err := retryOnAwsCode(s3.ErrCodeNoSuchBucket, func() (interface{}, error) {
+		return conn.GetObjectLockConfiguration(&s3.GetObjectLockConfigurationInput{
+			Bucket: aws.String(bucket),
+		})
+	})
+	if err != nil {
+		// Certain S3 implementations do not include this API
+		if isAWSErr(err, "MethodNotAllowed", "") {
+			return nil, nil
+		}
+
+		if isAWSErr(err, "ObjectLockConfigurationNotFoundError", "") {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	return flattenS3ObjectLockConfiguration(resp.(*s3.GetObjectLockConfigurationOutput).ObjectLockConfiguration), nil
+}
+
+func expandS3ObjectLockConfiguration(vConf []interface{}) *s3.ObjectLockConfiguration {
+	if len(vConf) == 0 || vConf[0] == nil {
+		return nil
+	}
+
+	mConf := vConf[0].(map[string]interface{})
+
+	conf := &s3.ObjectLockConfiguration{}
+
+	if vObjectLockEnabled, ok := mConf["object_lock_enabled"].(string); ok && vObjectLockEnabled != "" {
+		conf.ObjectLockEnabled = aws.String(vObjectLockEnabled)
+	}
+
+	if vRule, ok := mConf["rule"].([]interface{}); ok && len(vRule) > 0 {
+		mRule := vRule[0].(map[string]interface{})
+
+		if vDefaultRetention, ok := mRule["default_retention"].([]interface{}); ok && len(vDefaultRetention) > 0 && vDefaultRetention[0] != nil {
+			mDefaultRetention := vDefaultRetention[0].(map[string]interface{})
+
+			conf.Rule = &s3.ObjectLockRule{
+				DefaultRetention: &s3.DefaultRetention{},
+			}
+
+			if vMode, ok := mDefaultRetention["mode"].(string); ok && vMode != "" {
+				conf.Rule.DefaultRetention.Mode = aws.String(vMode)
+			}
+			if vDays, ok := mDefaultRetention["days"].(int); ok && vDays > 0 {
+				conf.Rule.DefaultRetention.Days = aws.Int64(int64(vDays))
+			}
+			if vYears, ok := mDefaultRetention["years"].(int); ok && vYears > 0 {
+				conf.Rule.DefaultRetention.Years = aws.Int64(int64(vYears))
+			}
+		}
+	}
+
+	return conf
+}
+
+func flattenS3ObjectLockConfiguration(conf *s3.ObjectLockConfiguration) []interface{} {
+	if conf == nil {
+		return []interface{}{}
+	}
+
+	mConf := map[string]interface{}{
+		"object_lock_enabled": aws.StringValue(conf.ObjectLockEnabled),
+	}
+
+	if conf.Rule != nil && conf.Rule.DefaultRetention != nil {
+		mRule := map[string]interface{}{
+			"default_retention": []interface{}{
+				map[string]interface{}{
+					"mode":  aws.StringValue(conf.Rule.DefaultRetention.Mode),
+					"days":  int(aws.Int64Value(conf.Rule.DefaultRetention.Days)),
+					"years": int(aws.Int64Value(conf.Rule.DefaultRetention.Years)),
+				},
+			},
+		}
+
+		mConf["rule"] = []interface{}{mRule}
+	}
+
+	return []interface{}{mConf}
 }

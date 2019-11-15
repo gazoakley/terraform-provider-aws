@@ -6,7 +6,7 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/ec2"
-	"github.com/hashicorp/terraform/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
 )
 
 func resourceAwsDefaultRouteTable() *schema.Resource {
@@ -36,9 +36,10 @@ func resourceAwsDefaultRouteTable() *schema.Resource {
 			},
 
 			"route": {
-				Type:     schema.TypeSet,
-				Computed: true,
-				Optional: true,
+				Type:       schema.TypeSet,
+				ConfigMode: schema.SchemaConfigModeAttr,
+				Computed:   true,
+				Optional:   true,
 				Elem: &schema.Resource{
 					Schema: map[string]*schema.Schema{
 						"cidr_block": {

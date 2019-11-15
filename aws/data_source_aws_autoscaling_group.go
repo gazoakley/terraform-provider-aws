@@ -7,7 +7,7 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/autoscaling"
-	"github.com/hashicorp/terraform/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
 )
 
 func dataSourceAwsAutoscalingGroup() *schema.Resource {
@@ -143,11 +143,8 @@ func dataSourceAwsAutoscalingGroupRead(d *schema.ResourceData, meta interface{})
 
 	log.Printf("[DEBUG] aws_autoscaling_group - Single Auto Scaling Group found: %s", *group.AutoScalingGroupName)
 
-	if err := groupDescriptionAttributes(d, group); err != nil {
-		return err
-	}
-
-	return nil
+	err1 := groupDescriptionAttributes(d, group)
+	return err1
 }
 
 // Populate group attribute fields with the returned group

@@ -2,6 +2,8 @@ package aws
 
 import (
 	"fmt"
+	"log"
+	"strings"
 	"testing"
 	"time"
 
@@ -9,9 +11,9 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/iam"
-	"github.com/hashicorp/terraform/helper/acctest"
-	"github.com/hashicorp/terraform/helper/resource"
-	"github.com/hashicorp/terraform/terraform"
+	"github.com/hashicorp/terraform-plugin-sdk/helper/acctest"
+	"github.com/hashicorp/terraform-plugin-sdk/helper/resource"
+	"github.com/hashicorp/terraform-plugin-sdk/terraform"
 	"github.com/pquerna/otp/totp"
 )
 
@@ -52,29 +54,115 @@ func TestValidateIamUserName(t *testing.T) {
 	}
 }
 
-func TestAccAWSUser_importBasic(t *testing.T) {
-	resourceName := "aws_iam_user.user"
-
-	n := fmt.Sprintf("test-user-%d", acctest.RandInt())
-
-	resource.ParallelTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckAWSUserDestroy,
-		Steps: []resource.TestStep{
-			{
-				Config: testAccAWSUserConfig(n, "/"),
-			},
-
-			{
-				ResourceName:      resourceName,
-				ImportState:       true,
-				ImportStateVerify: true,
-				ImportStateVerifyIgnore: []string{
-					"force_destroy"},
-			},
-		},
+func init() {
+	resource.AddTestSweepers("aws_iam_user", &resource.Sweeper{
+		Name: "aws_iam_user",
+		F:    testSweepIamUsers,
 	})
+}
+
+func testSweepIamUsers(region string) error {
+	client, err := sharedClientForRegion(region)
+	if err != nil {
+		return fmt.Errorf("error getting client: %s", err)
+	}
+	conn := client.(*AWSClient).iamconn
+	prefixes := []string{
+		"test-user",
+		"tf-acc-test",
+	}
+	users := make([]*iam.User, 0)
+
+	err = conn.ListUsersPages(&iam.ListUsersInput{}, func(page *iam.ListUsersOutput, lastPage bool) bool {
+		for _, user := range page.Users {
+			for _, prefix := range prefixes {
+				if strings.HasPrefix(aws.StringValue(user.UserName), prefix) {
+					users = append(users, user)
+					break
+				}
+			}
+		}
+
+		return !lastPage
+	})
+
+	if testSweepSkipSweepError(err) {
+		log.Printf("[WARN] Skipping IAM User sweep for %s: %s", region, err)
+		return nil
+	}
+
+	if err != nil {
+		return fmt.Errorf("Error retrieving IAM Users: %s", err)
+	}
+
+	if len(users) == 0 {
+		log.Print("[DEBUG] No IAM Users to sweep")
+		return nil
+	}
+
+	for _, user := range users {
+		username := aws.StringValue(user.UserName)
+		log.Printf("[DEBUG] Deleting IAM User: %s", username)
+
+		listAttachedUserPoliciesInput := &iam.ListAttachedUserPoliciesInput{
+			UserName: user.UserName,
+		}
+		listAttachedUserPoliciesOutput, err := conn.ListAttachedUserPolicies(listAttachedUserPoliciesInput)
+
+		if isAWSErr(err, iam.ErrCodeNoSuchEntityException, "") {
+			continue
+		}
+
+		if err != nil {
+			return fmt.Errorf("error listing IAM User (%s) attached policies: %s", username, err)
+		}
+
+		for _, attachedPolicy := range listAttachedUserPoliciesOutput.AttachedPolicies {
+			policyARN := aws.StringValue(attachedPolicy.PolicyArn)
+
+			log.Printf("[DEBUG] Detaching IAM User (%s) attached policy: %s", username, policyARN)
+
+			if err := detachPolicyFromUser(conn, username, policyARN); err != nil {
+				return fmt.Errorf("error detaching IAM User (%s) attached policy (%s): %s", username, policyARN, err)
+			}
+		}
+
+		if err := deleteAwsIamUserGroupMemberships(conn, username); err != nil {
+			return fmt.Errorf("error removing IAM User (%s) group memberships: %s", username, err)
+		}
+
+		if err := deleteAwsIamUserAccessKeys(conn, username); err != nil {
+			return fmt.Errorf("error removing IAM User (%s) access keys: %s", username, err)
+		}
+
+		if err := deleteAwsIamUserSSHKeys(conn, username); err != nil {
+			return fmt.Errorf("error removing IAM User (%s) SSH keys: %s", username, err)
+		}
+
+		if err := deleteAwsIamUserMFADevices(conn, username); err != nil {
+			return fmt.Errorf("error removing IAM User (%s) MFA devices: %s", username, err)
+		}
+
+		if err := deleteAwsIamUserLoginProfile(conn, username); err != nil {
+			return fmt.Errorf("error removing IAM User (%s) login profile: %s", username, err)
+		}
+
+		input := &iam.DeleteUserInput{
+			UserName: aws.String(username),
+		}
+
+		_, err = conn.DeleteUser(input)
+
+		if isAWSErr(err, iam.ErrCodeNoSuchEntityException, "") {
+			continue
+		}
+
+		if err != nil {
+			return fmt.Errorf("Error deleting IAM User (%s): %s", username, err)
+		}
+	}
+
+	return nil
 }
 
 func TestAccAWSUser_basic(t *testing.T) {
@@ -84,6 +172,7 @@ func TestAccAWSUser_basic(t *testing.T) {
 	name2 := fmt.Sprintf("test-user-%d", acctest.RandInt())
 	path1 := "/"
 	path2 := "/path2/"
+	resourceName := "aws_iam_user.user"
 
 	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:     func() { testAccPreCheck(t) },
@@ -96,6 +185,13 @@ func TestAccAWSUser_basic(t *testing.T) {
 					testAccCheckAWSUserExists("aws_iam_user.user", &conf),
 					testAccCheckAWSUserAttributes(&conf, name1, "/"),
 				),
+			},
+			{
+				ResourceName:      resourceName,
+				ImportState:       true,
+				ImportStateVerify: true,
+				ImportStateVerifyIgnore: []string{
+					"force_destroy"},
 			},
 			{
 				Config: testAccAWSUserConfig(name2, path2),
@@ -149,6 +245,13 @@ func TestAccAWSUser_ForceDestroy_AccessKey(t *testing.T) {
 					testAccCheckAWSUserCreatesAccessKey(&user),
 				),
 			},
+			{
+				ResourceName:      resourceName,
+				ImportState:       true,
+				ImportStateVerify: true,
+				ImportStateVerifyIgnore: []string{
+					"force_destroy"},
+			},
 		},
 	})
 }
@@ -170,6 +273,13 @@ func TestAccAWSUser_ForceDestroy_LoginProfile(t *testing.T) {
 					testAccCheckAWSUserExists(resourceName, &user),
 					testAccCheckAWSUserCreatesLoginProfile(&user),
 				),
+			},
+			{
+				ResourceName:      resourceName,
+				ImportState:       true,
+				ImportStateVerify: true,
+				ImportStateVerifyIgnore: []string{
+					"force_destroy"},
 			},
 		},
 	})
@@ -193,6 +303,13 @@ func TestAccAWSUser_ForceDestroy_MFADevice(t *testing.T) {
 					testAccCheckAWSUserCreatesMFADevice(&user),
 				),
 			},
+			{
+				ResourceName:      resourceName,
+				ImportState:       true,
+				ImportStateVerify: true,
+				ImportStateVerifyIgnore: []string{
+					"force_destroy"},
+			},
 		},
 	})
 }
@@ -215,6 +332,13 @@ func TestAccAWSUser_ForceDestroy_SSHKey(t *testing.T) {
 					testAccCheckAWSUserUploadsSSHKey(&user),
 				),
 			},
+			{
+				ResourceName:      resourceName,
+				ImportState:       true,
+				ImportStateVerify: true,
+				ImportStateVerifyIgnore: []string{
+					"force_destroy"},
+			},
 		},
 	})
 }
@@ -225,6 +349,7 @@ func TestAccAWSUser_nameChange(t *testing.T) {
 	name1 := fmt.Sprintf("test-user-%d", acctest.RandInt())
 	name2 := fmt.Sprintf("test-user-%d", acctest.RandInt())
 	path := "/"
+	resourceName := "aws_iam_user.user"
 
 	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:     func() { testAccPreCheck(t) },
@@ -236,6 +361,13 @@ func TestAccAWSUser_nameChange(t *testing.T) {
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheckAWSUserExists("aws_iam_user.user", &conf),
 				),
+			},
+			{
+				ResourceName:      resourceName,
+				ImportState:       true,
+				ImportStateVerify: true,
+				ImportStateVerifyIgnore: []string{
+					"force_destroy"},
 			},
 			{
 				Config: testAccAWSUserConfig(name2, path),
@@ -253,6 +385,7 @@ func TestAccAWSUser_pathChange(t *testing.T) {
 	name := fmt.Sprintf("test-user-%d", acctest.RandInt())
 	path1 := "/"
 	path2 := "/updated/"
+	resourceName := "aws_iam_user.user"
 
 	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:     func() { testAccPreCheck(t) },
@@ -264,6 +397,13 @@ func TestAccAWSUser_pathChange(t *testing.T) {
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheckAWSUserExists("aws_iam_user.user", &conf),
 				),
+			},
+			{
+				ResourceName:      resourceName,
+				ImportState:       true,
+				ImportStateVerify: true,
+				ImportStateVerifyIgnore: []string{
+					"force_destroy"},
 			},
 			{
 				Config: testAccAWSUserConfig(name, path2),
@@ -297,6 +437,13 @@ func TestAccAWSUser_permissionsBoundary(t *testing.T) {
 					resource.TestCheckResourceAttr(resourceName, "permissions_boundary", permissionsBoundary1),
 					testAccCheckAWSUserPermissionsBoundary(&user, permissionsBoundary1),
 				),
+			},
+			{
+				ResourceName:      resourceName,
+				ImportState:       true,
+				ImportStateVerify: true,
+				ImportStateVerifyIgnore: []string{
+					"force_destroy"},
 			},
 			// Test update
 			{
@@ -364,6 +511,13 @@ func TestAccAWSUser_tags(t *testing.T) {
 					resource.TestCheckResourceAttr(resourceName, "tags.Name", "test-Name"),
 					resource.TestCheckResourceAttr(resourceName, "tags.tag2", "test-tag2"),
 				),
+			},
+			{
+				ResourceName:      resourceName,
+				ImportState:       true,
+				ImportStateVerify: true,
+				ImportStateVerifyIgnore: []string{
+					"force_destroy"},
 			},
 			{
 				Config: testAccAWSUserConfig_tagsUpdate(rName),
@@ -523,7 +677,7 @@ func testAccCheckAWSUserCreatesMFADevice(getUserOutput *iam.GetUserOutput) resou
 		}
 
 		secret := string(createVirtualMFADeviceOutput.VirtualMFADevice.Base32StringSeed)
-		authenticationCode1, err := totp.GenerateCode(secret, time.Now().Add(time.Duration(-30*time.Second)))
+		authenticationCode1, err := totp.GenerateCode(secret, time.Now().Add(-30*time.Second))
 		if err != nil {
 			return fmt.Errorf("error generating Virtual MFA Device authentication code 1: %s", err)
 		}
@@ -594,7 +748,7 @@ func testAccAWSUserConfigForceDestroy(rName string) string {
 	return fmt.Sprintf(`
 resource "aws_iam_user" "test" {
   force_destroy = true
-  name = %q
+  name          = %q
 }
 `, rName)
 }
@@ -603,6 +757,7 @@ func testAccAWSUserConfig_tags(rName string) string {
 	return fmt.Sprintf(`
 resource "aws_iam_user" "test" {
   name = %q
+
   tags = {
     Name = "test-Name"
     tag2 = "test-tag2"
@@ -615,6 +770,7 @@ func testAccAWSUserConfig_tagsUpdate(rName string) string {
 	return fmt.Sprintf(`
 resource "aws_iam_user" "test" {
   name = %q
+
   tags = {
     tag2 = "test-tagUpdate"
   }

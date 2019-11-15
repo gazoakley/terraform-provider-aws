@@ -8,8 +8,8 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/arn"
 	"github.com/aws/aws-sdk-go/service/directconnect"
-	"github.com/hashicorp/terraform/helper/schema"
-	"github.com/hashicorp/terraform/helper/validation"
+	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/helper/validation"
 )
 
 func resourceAwsDxHostedPrivateVirtualInterface() *schema.Resource {
@@ -82,10 +82,14 @@ func resourceAwsDxHostedPrivateVirtualInterface() *schema.Resource {
 				Default:      1500,
 				Optional:     true,
 				ForceNew:     true,
-				ValidateFunc: validateIntegerInSlice([]int{1500, 9001}),
+				ValidateFunc: validation.IntInSlice([]int{1500, 9001}),
 			},
 			"jumbo_frame_capable": {
 				Type:     schema.TypeBool,
+				Computed: true,
+			},
+			"aws_device": {
+				Type:     schema.TypeString,
 				Computed: true,
 			},
 		},
@@ -172,6 +176,7 @@ func resourceAwsDxHostedPrivateVirtualInterfaceRead(d *schema.ResourceData, meta
 	d.Set("owner_account_id", vif.OwnerAccount)
 	d.Set("mtu", vif.Mtu)
 	d.Set("jumbo_frame_capable", vif.JumboFrameCapable)
+	d.Set("aws_device", vif.AwsDeviceV2)
 
 	return nil
 }

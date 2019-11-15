@@ -1,12 +1,12 @@
 ---
+subcategory: "VPC"
 layout: "aws"
 page_title: "AWS: aws_security_group"
-sidebar_current: "docs-aws-resource-security-group"
 description: |-
   Provides a security group resource.
 ---
 
-# aws_security_group
+# Resource: aws_security_group
 
 Provides a security group resource.
 
@@ -19,21 +19,26 @@ a conflict of rule settings and will overwrite rules.
 
 ~> **NOTE:** Referencing Security Groups across VPC peering has certain restrictions. More information is available in the [VPC Peering User Guide](https://docs.aws.amazon.com/vpc/latest/peering/vpc-peering-security-groups.html).
 
+~> **NOTE:** Due to [AWS Lambda improved VPC networking changes that began deploying in September 2019](https://aws.amazon.com/blogs/compute/announcing-improved-vpc-networking-for-aws-lambda-functions/), security groups associated with Lambda Functions can take up to 45 minutes to successfully delete. Terraform AWS Provider version 2.31.0 and later automatically handles this increased timeout, however prior versions require setting the [customizable deletion timeout](#timeouts) to 45 minutes (`delete = "45m"`). AWS and HashiCorp are working together to reduce the amount of time required for resource deletion and updates can be tracked in this [GitHub issue](https://github.com/terraform-providers/terraform-provider-aws/issues/10329).
+
 ## Example Usage
 
 Basic usage
 
 ```hcl
-resource "aws_security_group" "allow_all" {
-  name        = "allow_all"
-  description = "Allow all inbound traffic"
+resource "aws_security_group" "allow_tls" {
+  name        = "allow_tls"
+  description = "Allow TLS inbound traffic"
   vpc_id      = "${aws_vpc.main.id}"
 
   ingress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
+    # TLS (change to whatever ports you need)
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    # Please restrict your ingress to only necessary IPs and ports.
+    # Opening to 0.0.0.0/0 can lead to security vulnerabilities.
+    cidr_blocks = # add a CIDR block here
   }
 
   egress {
@@ -49,15 +54,18 @@ resource "aws_security_group" "allow_all" {
 Basic usage with tags:
 
 ```hcl
-resource "aws_security_group" "allow_all" {
-  name        = "allow_all"
-  description = "Allow all inbound traffic"
+resource "aws_security_group" "allow_tls" {
+  name        = "allow_tls"
+  description = "Allow TLS inbound traffic"
 
   ingress {
-    from_port   = 0
-    to_port     = 65535
+    # TLS (change to whatever ports you need)
+    from_port   = 443
+    to_port     = 443
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    # Please restrict your ingress to only necessary IPs and ports.
+    # Opening to 0.0.0.0/0 can lead to security vulnerabilities.
+    cidr_blocks = # add your IP address here
   }
 
   tags = {
@@ -80,8 +88,10 @@ assign a random, unique name
   to classify your security groups in a way that can be updated, use `tags`.
 * `ingress` - (Optional) Can be specified multiple times for each
    ingress rule. Each ingress block supports fields documented below.
+   This argument is processed in [attribute-as-blocks mode](/docs/configuration/attr-as-blocks.html).
 * `egress` - (Optional, VPC only) Can be specified multiple times for each
       egress rule. Each egress block supports fields documented below.
+      This argument is processed in [attribute-as-blocks mode](/docs/configuration/attr-as-blocks.html).
 * `revoke_rules_on_delete` - (Optional) Instruct Terraform to revoke all of the
 Security Groups attached ingress and egress rules before deleting the rule
 itself. This is normally not needed, however certain AWS services such as
@@ -177,8 +187,8 @@ In addition to all arguments above, the following attributes are exported:
 `aws_security_group` provides the following [Timeouts](/docs/configuration/resources.html#timeouts)
 configuration options:
 
-- `create` - (Default `10 minutes`) How long to wait for a security group to be created.
-- `delete` - (Default `10 minutes`) How long to wait for a security group to be deleted.
+- `create` - (Default `10m`) How long to wait for a security group to be created.
+- `delete` - (Default `10m`) How long to retry on `DependencyViolation` errors during security group deletion from lingering ENIs left by certain AWS services such as Elastic Load Balancing. NOTE: Lambda ENIs can take up to 45 minutes to delete, which is not affected by changing this customizable timeout (in version 2.31.0 and later of the Terraform AWS Provider) unless it is increased above 45 minutes.
 
 ## Import
 

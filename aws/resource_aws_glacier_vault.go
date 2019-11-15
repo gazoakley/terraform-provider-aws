@@ -6,13 +6,13 @@ import (
 	"log"
 	"regexp"
 
-	"github.com/hashicorp/terraform/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/service/glacier"
-	"github.com/hashicorp/terraform/helper/structure"
-	"github.com/hashicorp/terraform/helper/validation"
+	"github.com/hashicorp/terraform-plugin-sdk/helper/structure"
+	"github.com/hashicorp/terraform-plugin-sdk/helper/validation"
 )
 
 func resourceAwsGlacierVault() *schema.Resource {
@@ -406,7 +406,7 @@ func getGlacierVaultNotification(glacierconn *glacier.Glacier, vaultName string)
 		return nil, fmt.Errorf("Error reading Glacier Vault Notifications: %s", err.Error())
 	}
 
-	notifications := make(map[string]interface{}, 0)
+	notifications := make(map[string]interface{})
 
 	log.Print("[DEBUG] Flattening Glacier Vault Notifications")
 
