@@ -66,6 +66,45 @@ func resourceAwsElasticSearchDomain() *schema.Resource {
 				Optional: true,
 				Computed: true,
 			},
+			"advanced_security_options": {
+				Type:     schema.TypeList,
+				Optional: true,
+				MaxItems: 1,
+				Elem: &schema.Resource{
+					Schema: map[string]*schema.Schema{
+						"enabled": {
+							Type:     schema.TypeBool,
+							Required: true,
+							ForceNew: true,
+						},
+						"internal_user_database_enabled": {
+							Type:     schema.TypeBool,
+							Optional: true,
+						},
+						"master_user_options": {
+							Type:     schema.TypeList,
+							Optional: true,
+							Elem: &schema.Resource{
+								Schema: map[string]*schema.Schema{
+									"master_user_arn": {
+										Type:     schema.TypeString,
+										Optional: true,
+									},
+									"master_user_name": {
+										Type:     schema.TypeString,
+										Optional: true,
+									},
+									"master_user_password": {
+										Type:      schema.TypeString,
+										Optional:  true,
+										Sensitive: true,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
 			"domain_name": {
 				Type:     schema.TypeString,
 				Required: true,
@@ -385,6 +424,10 @@ func resourceAwsElasticSearchDomainCreate(d *schema.ResourceData, meta interface
 		input.AdvancedOptions = stringMapToPointers(v.(map[string]interface{}))
 	}
 
+	if v, ok := d.GetOk("advanced_security_options"); ok {
+		input.AdvancedSecurityOptions = expandAdvancedSecurityOptions(v.([]interface{}))
+	}
+
 	if v, ok := d.GetOk("ebs_options"); ok {
 		options := v.([]interface{})
 
@@ -633,6 +676,15 @@ func resourceAwsElasticSearchDomainRead(d *schema.ResourceData, meta interface{}
 		return err
 	}
 
+	// Use AdvancedSecurityOptions from resource if possible
+	// because DescribeElasticsearchDomainConfig does not return MasterUserOptions
+	if len(d.Get("advanced_security_options").([]interface{})) == 0 {
+		err = d.Set("advanced_security_options", flattenAdvancedSecurityOptions(ds.AdvancedSecurityOptions))
+		if err != nil {
+			return err
+		}
+	}
+
 	if err := d.Set("snapshot_options", flattenESSnapshotOptions(ds.SnapshotOptions)); err != nil {
 		return fmt.Errorf("error setting snapshot_options: %s", err)
 	}
@@ -715,6 +767,10 @@ func resourceAwsElasticSearchDomainUpdate(d *schema.ResourceData, meta interface
 
 	if d.HasChange("advanced_options") {
 		input.AdvancedOptions = stringMapToPointers(d.Get("advanced_options").(map[string]interface{}))
+	}
+
+	if d.HasChange("advanced_security_options") {
+		input.AdvancedSecurityOptions = expandAdvancedSecurityOptions(d.Get("advanced_security_options").([]interface{}))
 	}
 
 	if d.HasChange("domain_endpoint_options") {
