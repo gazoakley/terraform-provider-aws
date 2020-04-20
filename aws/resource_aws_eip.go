@@ -90,6 +90,11 @@ func resourceAwsEip() *schema.Resource {
 				Type:     schema.TypeString,
 				Optional: true,
 			},
+			"address": {
+				Type:     schema.TypeString,
+				Optional: true,
+				ForceNew: true,
+			},
 
 			"public_ipv4_pool": {
 				Type:     schema.TypeString,
@@ -116,7 +121,14 @@ func resourceAwsEipCreate(d *schema.ResourceData, meta interface{}) error {
 		Domain: aws.String(domainOpt),
 	}
 
-	if v, ok := d.GetOk("public_ipv4_pool"); ok {
+	// address if exists
+	addressV, addressOK := d.GetOk("address")
+
+	if addressOK && domainOpt == "vpc" {
+		// If we are in a VPC and have assigned an address: add it.
+		allocOpts.Address = aws.String(addressV.(string))
+	} else if v, ok := d.GetOk("public_ipv4_pool"); ok {
+		// If we have not assigned an address but have assigned a public_ipv4_pool: add it
 		allocOpts.PublicIpv4Pool = aws.String(v.(string))
 	}
 
