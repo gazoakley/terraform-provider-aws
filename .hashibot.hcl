@@ -35,8 +35,44 @@ behavior "deprecated_import_commenter" "hashicorp_terraform" {
   EOF
 }
 
+behavior "deprecated_import_commenter" "sdkv1" {
+  import_regexp = "github.com/hashicorp/terraform-plugin-sdk/(helper/(acctest|customdiff|logging|resource|schema|structure|validation)|terraform)"
+  marker_label  = "terraform-plugin-sdk-v1"
+
+  message = <<-EOF
+    Hello, and thank you for your contribution!
+
+    This project recently upgraded to [V2 of the Terraform Plugin SDK](https://www.terraform.io/docs/extend/guides/v2-upgrade-guide.html)
+
+    This pull request appears to include at least one V1 import path of the SDK (`${var.import_path}`). Please import the V2 path `github.com/hashicorp/terraform-plugin-sdk/v2/helper/PACKAGE`
+
+    To resolve this situation without losing any existing work, you may be able to Git rebase your branch against the current master branch (example below); replacing any remaining old import paths with the newer ones.
+
+    ```console
+    $ git fetch --all
+    $ git rebase origin/master
+    ```
+
+    Another option is to create a new branch from the current master with the same code changes (replacing the import paths), submit a new pull request, and close this existing pull request.
+
+    We apologize for this inconvenience and appreciate your effort. Thank you for contributing and helping make the Terraform AWS Provider better for everyone.
+  EOF
+}
+
+behavior "deprecated_import_commenter" "sdkv1_deprecated" {
+  import_regexp = "github.com/hashicorp/terraform-plugin-sdk/helper/(hashcode|mutexkv|encryption)"
+  marker_label  = "terraform-plugin-sdk-v1"
+
+  message = <<-EOF
+    Hello, and thank you for your contribution!
+    This pull request appears to include the Go import path `${var.import_path}`, which was deprecated after upgrading to [V2 of the Terraform Plugin SDK](https://www.terraform.io/docs/extend/guides/v2-upgrade-guide.html).
+    You may use a now internalized version of the package found in `github.com/terraform-providers/terraform-provider-aws/aws/internal/PACKAGE`.
+  EOF
+}
+
 behavior "opened_pull_request_labeler" "triage" {
-  labels = ["needs-triage"]
+  labels             = ["needs-triage"]
+  skip_collaborators = true
 }
 
 queued_behavior "release_commenter" "releases" {
@@ -153,6 +189,9 @@ behavior "regexp_issue_labeler_v2" "service_labels" {
     "service/cloudwatchlogs" = [
       "aws_cloudwatch_log_",
     ],
+    "service/codeartifact" = [
+      "aws_codeartifact_",
+    ],
     "service/codebuild" = [
       "aws_codebuild_",
     ],
@@ -227,9 +266,11 @@ behavior "regexp_issue_labeler_v2" "service_labels" {
       "aws_main_route_table_association",
       "aws_network_interface",
       "aws_placement_group",
+      "aws_prefix_list",
       "aws_spot",
       "aws_route(\"|`|$)",
       "aws_vpn_",
+      "aws_volume_attachment",
     ],
     "service/ecr" = [
       "aws_ecr_",
@@ -244,7 +285,7 @@ behavior "regexp_issue_labeler_v2" "service_labels" {
       "aws_eks_",
     ],
     "service/elastic-transcoder" = [
-      "aws_elastic_transcoder_",
+      "aws_elastictranscoder_",
     ],
     "service/elasticache" = [
       "aws_elasticache_",
@@ -329,6 +370,9 @@ behavior "regexp_issue_labeler_v2" "service_labels" {
     "service/kinesisanalytics" = [
       "aws_kinesis_analytics_",
     ],
+    "service/kinesisanalyticsv2" = [
+      "aws_kinesisanalyticsv2_",
+    ],
     "service/kms" = [
       "aws_kms_",
     ],
@@ -380,11 +424,17 @@ behavior "regexp_issue_labeler_v2" "service_labels" {
     "service/neptune" = [
       "aws_neptune_",
     ],
+    "service/networkmanager" = [
+      "aws_networkmanager_",
+    ],
     "service/opsworks" = [
       "aws_opsworks_",
     ],
     "service/organizations" = [
       "aws_organizations_",
+    ],
+    "service/outposts" = [
+      "aws_outposts_",
     ],
     "service/personalize" = [
       "aws_personalize_",
@@ -417,6 +467,9 @@ behavior "regexp_issue_labeler_v2" "service_labels" {
     "service/resourcegroups" = [
       "aws_resourcegroups_",
     ],
+    "service/resourcegroupstaggingapi" = [
+      "aws_resourcegroupstaggingapi_",
+    ],
     "service/robomaker" = [
       "aws_robomaker_",
     ],
@@ -425,7 +478,7 @@ behavior "regexp_issue_labeler_v2" "service_labels" {
       "aws_route53_([^d]|d[^o]|do[^m]|dom[^a]|doma[^i]|domai[^n]|domain[^s]|domains[^_]|[^r]|r[^e]|re[^s]|res[^o]|reso[^l]|resol[^v]|resolv[^e]|resolve[^r]|resolver[^_])",
     ],
     "service/route53domains" = [
-      "aws_route53_domains_",
+      "aws_route53domains_",
     ],
     "service/route53resolver" = [
       "aws_route53_resolver_",
@@ -488,6 +541,9 @@ behavior "regexp_issue_labeler_v2" "service_labels" {
     "service/swf" = [
       "aws_swf_",
     ],
+    "service/synthetics" = [
+      "aws_synthetics_",
+    ],
     "service/transfer" = [
       "aws_transfer_",
     ],
@@ -520,6 +576,11 @@ behavior "pull_request_path_labeler" "service_labels" {
   label_map = {
     # label provider related changes
     "provider" = [
+      "*.md",
+      ".github/**/*",
+      ".gitignore",
+      ".go-version",
+      ".hashibot.hcl",
       "aws/auth_helpers.go",
       "aws/awserr.go",
       "aws/config.go",
@@ -527,8 +588,16 @@ behavior "pull_request_path_labeler" "service_labels" {
       "aws/*_aws_ip_ranges*",
       "aws/*_aws_partition*",
       "aws/*_aws_region*",
+      "aws/internal/flatmap/*",
+      "aws/internal/keyvaluetags/*",
+      "aws/internal/naming/*",
       "aws/provider.go",
       "aws/utils.go",
+      "docs/*.md",
+      "docs/contributing/**/*",
+      "GNUmakefile",
+      "infrastructure/**/*",
+      "main.go",
       "renovate.json",
       "website/docs/index.html.markdown",
       "website/**/arn*",
@@ -536,12 +605,21 @@ behavior "pull_request_path_labeler" "service_labels" {
       "website/**/partition*",
       "website/**/region*"
     ]
-    # label test related changes
+    "documentation" = [
+      "docs/**/*",
+      "*.md",
+    ]
+    "examples" = [
+      "examples/**/*",
+    ]
     "tests" = [
       "**/*_test.go",
+      "**/testdata/**/*",
+      "**/test-fixtures/**/*",
+      ".github/workflows/*",
       ".gometalinter.json",
+      ".markdownlinkcheck.json",
       ".markdownlint.yml",
-      ".travis.yml",
       "staticcheck.conf"
     ]
     # label services
@@ -669,6 +747,10 @@ behavior "pull_request_path_labeler" "service_labels" {
       "**/*_cloudwatch_log_*",
       "**/cloudwatch_log_*"
     ]
+    "service/codeartifact" = [
+      "**/*_codeartifact_*",
+      "**/codeartifact_*"
+    ]
     "service/codebuild" = [
       "**/*_codebuild_*",
       "**/codebuild_*"
@@ -778,6 +860,7 @@ behavior "pull_request_path_labeler" "service_labels" {
       "aws/*_aws_network_acl*",
       "aws/*_aws_network_interface*",
       "aws/*_aws_placement_group*",
+      "aws/*_aws_prefix_list*",
       "aws/*_aws_route_table*",
       "aws/*_aws_route.*",
       "aws/*_aws_security_group*",
@@ -786,6 +869,7 @@ behavior "pull_request_path_labeler" "service_labels" {
       "aws/*_aws_subnet*",
       "aws/*_aws_vpc*",
       "aws/*_aws_vpn*",
+      "aws/*_aws_volume_attachment*",
       "website/**/availability_zone*",
       "website/**/customer_gateway*",
       "website/**/default_network_acl*",
@@ -806,6 +890,7 @@ behavior "pull_request_path_labeler" "service_labels" {
       "website/**/network_acl*",
       "website/**/network_interface*",
       "website/**/placement_group*",
+      "website/**/prefix_list*",
       "website/**/route_table*",
       "website/**/route.*",
       "website/**/security_group*",
@@ -813,7 +898,8 @@ behavior "pull_request_path_labeler" "service_labels" {
       "website/**/spot_*",
       "website/**/subnet*",
       "website/**/vpc*",
-      "website/**/vpn*"
+      "website/**/vpn*",
+      "website/**/volume_attachment*"
     ]
     "service/ecr" = [
       "**/*_ecr_*",
@@ -948,6 +1034,10 @@ behavior "pull_request_path_labeler" "service_labels" {
       "**/*_kinesis_analytics_*",
       "**/kinesis_analytics_*"
     ]
+    "service/kinesisanalyticsv2" = [
+      "**/*_kinesisanalyticsv2_*",
+      "**/kinesisanalyticsv2_*"
+    ]
     "service/kms" = [
       "**/*_kms_*",
       "**/kms_*"
@@ -1016,6 +1106,10 @@ behavior "pull_request_path_labeler" "service_labels" {
       "**/*_neptune_*",
       "**/neptune_*"
     ]
+    "service/networkmanager" = [
+      "**/*_networkmanager_*",
+      "**/networkmanager_*"
+    ]
     "service/opsworks" = [
       "**/*_opsworks_*",
       "**/opsworks_*"
@@ -1023,6 +1117,10 @@ behavior "pull_request_path_labeler" "service_labels" {
     "service/organizations" = [
       "**/*_organizations_*",
       "**/organizations_*"
+    ]
+    "service/outposts" = [
+      "**/*_outposts_*",
+      "**/outposts_*"
     ]
     "service/pinpoint" = [
       "**/*_pinpoint_*",
@@ -1062,6 +1160,10 @@ behavior "pull_request_path_labeler" "service_labels" {
       "**/*_resourcegroups_*",
       "**/resourcegroups_*"
     ]
+    "service/resourcegroupstaggingapi" = [
+      "**/*_resourcegroupstaggingapi_*",
+      "**/resourcegroupstaggingapi_*"
+    ]
     "service/robomaker" = [
       "**/*_robomaker_*",
       "**/robomaker_*",
@@ -1079,8 +1181,8 @@ behavior "pull_request_path_labeler" "service_labels" {
       "**/route53_zone*"
     ]
     "service/route53domains" = [
-      "**/*_route53_domains_*",
-      "**/route53_domains_*"
+      "**/*_route53domains_*",
+      "**/route53domains_*"
     ]
     "service/route53resolver" = [
       "**/*_route53_resolver_*",
@@ -1163,6 +1265,10 @@ behavior "pull_request_path_labeler" "service_labels" {
     "service/swf" = [
       "**/*_swf_*",
       "**/swf_*"
+    ]
+    "service/synthetics" = [
+      "**/*_synthetics_*",
+      "**/synthetics_*"
     ]
     "service/transfer" = [
       "**/*_transfer_*",
