@@ -1,14 +1,15 @@
 package aws
 
 import (
+	"context"
 	"encoding/base64"
 	"fmt"
 	"log"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/mq"
-	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
-	"github.com/hashicorp/terraform-plugin-sdk/helper/validation"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 	"github.com/terraform-providers/terraform-provider-aws/aws/internal/keyvaluetags"
 )
 
@@ -21,7 +22,7 @@ func resourceAwsMqConfiguration() *schema.Resource {
 		Importer: &schema.ResourceImporter{
 			State: schema.ImportStatePassthrough,
 		},
-		CustomizeDiff: func(diff *schema.ResourceDiff, v interface{}) error {
+		CustomizeDiff: func(_ context.Context, diff *schema.ResourceDiff, v interface{}) error {
 			if diff.HasChange("description") {
 				return diff.SetNewComputed("latest_revision")
 			}
@@ -104,6 +105,7 @@ func resourceAwsMqConfigurationCreate(d *schema.ResourceData, meta interface{}) 
 
 func resourceAwsMqConfigurationRead(d *schema.ResourceData, meta interface{}) error {
 	conn := meta.(*AWSClient).mqconn
+	ignoreTagsConfig := meta.(*AWSClient).IgnoreTagsConfig
 
 	log.Printf("[INFO] Reading MQ Configuration %s", d.Id())
 	out, err := conn.DescribeConfiguration(&mq.DescribeConfigurationInput{
@@ -140,7 +142,7 @@ func resourceAwsMqConfigurationRead(d *schema.ResourceData, meta interface{}) er
 
 	d.Set("data", string(b))
 
-	if err := d.Set("tags", keyvaluetags.MqKeyValueTags(out.Tags).IgnoreAws().Map()); err != nil {
+	if err := d.Set("tags", keyvaluetags.MqKeyValueTags(out.Tags).IgnoreAws().IgnoreConfig(ignoreTagsConfig).Map()); err != nil {
 		return fmt.Errorf("error setting tags: %s", err)
 	}
 

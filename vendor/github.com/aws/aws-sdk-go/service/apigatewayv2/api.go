@@ -2459,6 +2459,93 @@ func (c *ApiGatewayV2) DeleteVpcLinkWithContext(ctx aws.Context, input *DeleteVp
 	return out, req.Send()
 }
 
+const opExportApi = "ExportApi"
+
+// ExportApiRequest generates a "aws/request.Request" representing the
+// client's request for the ExportApi operation. The "output" return
+// value will be populated with the request's response once the request completes
+// successfully.
+//
+// Use "Send" method on the returned Request to send the API call to the service.
+// the "output" return value is not valid until after Send returns without error.
+//
+// See ExportApi for more information on using the ExportApi
+// API call, and error handling.
+//
+// This method is useful when you want to inject custom logic or configuration
+// into the SDK's request lifecycle. Such as custom headers, or retry logic.
+//
+//
+//    // Example sending a request using the ExportApiRequest method.
+//    req, resp := client.ExportApiRequest(params)
+//
+//    err := req.Send()
+//    if err == nil { // resp is now filled
+//        fmt.Println(resp)
+//    }
+//
+// See also, https://docs.aws.amazon.com/goto/WebAPI/apigatewayv2-2018-11-29/ExportApi
+func (c *ApiGatewayV2) ExportApiRequest(input *ExportApiInput) (req *request.Request, output *ExportApiOutput) {
+	op := &request.Operation{
+		Name:       opExportApi,
+		HTTPMethod: "GET",
+		HTTPPath:   "/v2/apis/{apiId}/exports/{specification}",
+	}
+
+	if input == nil {
+		input = &ExportApiInput{}
+	}
+
+	output = &ExportApiOutput{}
+	req = c.newRequest(op, input, output)
+	return
+}
+
+// ExportApi API operation for AmazonApiGatewayV2.
+//
+// Exports a definition of an API in a particular output format and specification.
+//
+// Returns awserr.Error for service API and SDK errors. Use runtime type assertions
+// with awserr.Error's Code and Message methods to get detailed information about
+// the error.
+//
+// See the AWS API reference guide for AmazonApiGatewayV2's
+// API operation ExportApi for usage and error information.
+//
+// Returned Error Types:
+//   * NotFoundException
+//   The resource specified in the request was not found. See the message field
+//   for more information.
+//
+//   * TooManyRequestsException
+//   A limit has been exceeded. See the accompanying error message for details.
+//
+//   * BadRequestException
+//   The request is not valid, for example, the input is incomplete or incorrect.
+//   See the accompanying error message for details.
+//
+// See also, https://docs.aws.amazon.com/goto/WebAPI/apigatewayv2-2018-11-29/ExportApi
+func (c *ApiGatewayV2) ExportApi(input *ExportApiInput) (*ExportApiOutput, error) {
+	req, out := c.ExportApiRequest(input)
+	return out, req.Send()
+}
+
+// ExportApiWithContext is the same as ExportApi with the addition of
+// the ability to pass a context and additional request options.
+//
+// See ExportApi for details on how to use this API operation.
+//
+// The context must be non-nil and will be used for request cancellation. If
+// the context is nil a panic will occur. In the future the SDK may create
+// sub-contexts for http.Requests. See https://golang.org/pkg/context/
+// for more information on using Contexts.
+func (c *ApiGatewayV2) ExportApiWithContext(ctx aws.Context, input *ExportApiInput, opts ...request.Option) (*ExportApiOutput, error) {
+	req, out := c.ExportApiRequest(input)
+	req.SetContext(ctx)
+	req.ApplyOptions(opts...)
+	return out, req.Send()
+}
+
 const opGetApi = "GetApi"
 
 // GetApiRequest generates a "aws/request.Request" representing the
@@ -6144,8 +6231,8 @@ func (c *ApiGatewayV2) UpdateVpcLinkWithContext(ctx aws.Context, input *UpdateVp
 }
 
 type AccessDeniedException struct {
-	_            struct{} `type:"structure"`
-	respMetadata protocol.ResponseMetadata
+	_            struct{}                  `type:"structure"`
+	RespMetadata protocol.ResponseMetadata `json:"-" xml:"-"`
 
 	Message_ *string `locationName:"message" type:"string"`
 }
@@ -6162,17 +6249,17 @@ func (s AccessDeniedException) GoString() string {
 
 func newErrorAccessDeniedException(v protocol.ResponseMetadata) error {
 	return &AccessDeniedException{
-		respMetadata: v,
+		RespMetadata: v,
 	}
 }
 
 // Code returns the exception type name.
-func (s AccessDeniedException) Code() string {
+func (s *AccessDeniedException) Code() string {
 	return "AccessDeniedException"
 }
 
 // Message returns the exception's message.
-func (s AccessDeniedException) Message() string {
+func (s *AccessDeniedException) Message() string {
 	if s.Message_ != nil {
 		return *s.Message_
 	}
@@ -6180,22 +6267,22 @@ func (s AccessDeniedException) Message() string {
 }
 
 // OrigErr always returns nil, satisfies awserr.Error interface.
-func (s AccessDeniedException) OrigErr() error {
+func (s *AccessDeniedException) OrigErr() error {
 	return nil
 }
 
-func (s AccessDeniedException) Error() string {
+func (s *AccessDeniedException) Error() string {
 	return fmt.Sprintf("%s: %s", s.Code(), s.Message())
 }
 
 // Status code returns the HTTP status code for the request's response error.
-func (s AccessDeniedException) StatusCode() int {
-	return s.respMetadata.StatusCode
+func (s *AccessDeniedException) StatusCode() int {
+	return s.RespMetadata.StatusCode
 }
 
 // RequestID returns the service's response RequestID for request.
-func (s AccessDeniedException) RequestID() string {
-	return s.respMetadata.RequestID
+func (s *AccessDeniedException) RequestID() string {
+	return s.RespMetadata.RequestID
 }
 
 // Settings for logging access in a stage.
@@ -6240,6 +6327,11 @@ type Api struct {
 	// The stage name is typically appended to this URI to form a complete path
 	// to a deployed API stage.
 	ApiEndpoint *string `locationName:"apiEndpoint" type:"string"`
+
+	// Specifies whether an API is managed by API Gateway. You can't update or delete
+	// a managed API by using API Gateway. A managed API can be deleted only through
+	// the tooling or service that created it.
+	ApiGatewayManaged *bool `locationName:"apiGatewayManaged" type:"boolean"`
 
 	// The API ID.
 	ApiId *string `locationName:"apiId" type:"string"`
@@ -6307,6 +6399,12 @@ func (s Api) GoString() string {
 // SetApiEndpoint sets the ApiEndpoint field's value.
 func (s *Api) SetApiEndpoint(v string) *Api {
 	s.ApiEndpoint = &v
+	return s
+}
+
+// SetApiGatewayManaged sets the ApiGatewayManaged field's value.
+func (s *Api) SetApiGatewayManaged(v bool) *Api {
+	s.ApiGatewayManaged = &v
 	return s
 }
 
@@ -6574,8 +6672,8 @@ func (s *Authorizer) SetName(v string) *Authorizer {
 // The request is not valid, for example, the input is incomplete or incorrect.
 // See the accompanying error message for details.
 type BadRequestException struct {
-	_            struct{} `type:"structure"`
-	respMetadata protocol.ResponseMetadata
+	_            struct{}                  `type:"structure"`
+	RespMetadata protocol.ResponseMetadata `json:"-" xml:"-"`
 
 	// Describes the error encountered.
 	Message_ *string `locationName:"message" type:"string"`
@@ -6593,17 +6691,17 @@ func (s BadRequestException) GoString() string {
 
 func newErrorBadRequestException(v protocol.ResponseMetadata) error {
 	return &BadRequestException{
-		respMetadata: v,
+		RespMetadata: v,
 	}
 }
 
 // Code returns the exception type name.
-func (s BadRequestException) Code() string {
+func (s *BadRequestException) Code() string {
 	return "BadRequestException"
 }
 
 // Message returns the exception's message.
-func (s BadRequestException) Message() string {
+func (s *BadRequestException) Message() string {
 	if s.Message_ != nil {
 		return *s.Message_
 	}
@@ -6611,30 +6709,30 @@ func (s BadRequestException) Message() string {
 }
 
 // OrigErr always returns nil, satisfies awserr.Error interface.
-func (s BadRequestException) OrigErr() error {
+func (s *BadRequestException) OrigErr() error {
 	return nil
 }
 
-func (s BadRequestException) Error() string {
+func (s *BadRequestException) Error() string {
 	return fmt.Sprintf("%s: %s", s.Code(), s.Message())
 }
 
 // Status code returns the HTTP status code for the request's response error.
-func (s BadRequestException) StatusCode() int {
-	return s.respMetadata.StatusCode
+func (s *BadRequestException) StatusCode() int {
+	return s.RespMetadata.StatusCode
 }
 
 // RequestID returns the service's response RequestID for request.
-func (s BadRequestException) RequestID() string {
-	return s.respMetadata.RequestID
+func (s *BadRequestException) RequestID() string {
+	return s.RespMetadata.RequestID
 }
 
 // The requested operation would cause a conflict with the current state of
 // a service resource associated with the request. Resolve the conflict before
 // retrying this request. See the accompanying error message for details.
 type ConflictException struct {
-	_            struct{} `type:"structure"`
-	respMetadata protocol.ResponseMetadata
+	_            struct{}                  `type:"structure"`
+	RespMetadata protocol.ResponseMetadata `json:"-" xml:"-"`
 
 	// Describes the error encountered.
 	Message_ *string `locationName:"message" type:"string"`
@@ -6652,17 +6750,17 @@ func (s ConflictException) GoString() string {
 
 func newErrorConflictException(v protocol.ResponseMetadata) error {
 	return &ConflictException{
-		respMetadata: v,
+		RespMetadata: v,
 	}
 }
 
 // Code returns the exception type name.
-func (s ConflictException) Code() string {
+func (s *ConflictException) Code() string {
 	return "ConflictException"
 }
 
 // Message returns the exception's message.
-func (s ConflictException) Message() string {
+func (s *ConflictException) Message() string {
 	if s.Message_ != nil {
 		return *s.Message_
 	}
@@ -6670,22 +6768,22 @@ func (s ConflictException) Message() string {
 }
 
 // OrigErr always returns nil, satisfies awserr.Error interface.
-func (s ConflictException) OrigErr() error {
+func (s *ConflictException) OrigErr() error {
 	return nil
 }
 
-func (s ConflictException) Error() string {
+func (s *ConflictException) Error() string {
 	return fmt.Sprintf("%s: %s", s.Code(), s.Message())
 }
 
 // Status code returns the HTTP status code for the request's response error.
-func (s ConflictException) StatusCode() int {
-	return s.respMetadata.StatusCode
+func (s *ConflictException) StatusCode() int {
+	return s.RespMetadata.StatusCode
 }
 
 // RequestID returns the service's response RequestID for request.
-func (s ConflictException) RequestID() string {
-	return s.respMetadata.RequestID
+func (s *ConflictException) RequestID() string {
+	return s.RespMetadata.RequestID
 }
 
 // Represents a CORS configuration. Supported only for HTTP APIs. See Configuring
@@ -7070,6 +7168,8 @@ type CreateApiOutput struct {
 
 	ApiEndpoint *string `locationName:"apiEndpoint" type:"string"`
 
+	ApiGatewayManaged *bool `locationName:"apiGatewayManaged" type:"boolean"`
+
 	// The identifier.
 	ApiId *string `locationName:"apiId" type:"string"`
 
@@ -7125,6 +7225,12 @@ func (s CreateApiOutput) GoString() string {
 // SetApiEndpoint sets the ApiEndpoint field's value.
 func (s *CreateApiOutput) SetApiEndpoint(v string) *CreateApiOutput {
 	s.ApiEndpoint = &v
+	return s
+}
+
+// SetApiGatewayManaged sets the ApiGatewayManaged field's value.
+func (s *CreateApiOutput) SetApiGatewayManaged(v bool) *CreateApiOutput {
+	s.ApiGatewayManaged = &v
 	return s
 }
 
@@ -7712,6 +7818,9 @@ type CreateIntegrationInput struct {
 	// A string with a length between [1-64].
 	IntegrationMethod *string `locationName:"integrationMethod" type:"string"`
 
+	// A string with a length between [1-128].
+	IntegrationSubtype *string `locationName:"integrationSubtype" type:"string"`
+
 	// Represents an API method integration type.
 	//
 	// IntegrationType is a required field
@@ -7749,7 +7858,7 @@ type CreateIntegrationInput struct {
 	// for more information.
 	TemplateSelectionExpression *string `locationName:"templateSelectionExpression" type:"string"`
 
-	// An integer with a value between [50-29000].
+	// An integer with a value between [50-30000].
 	TimeoutInMillis *int64 `locationName:"timeoutInMillis" min:"50" type:"integer"`
 
 	// The TLS configuration for a private integration. If you specify a TLS configuration,
@@ -7829,6 +7938,12 @@ func (s *CreateIntegrationInput) SetDescription(v string) *CreateIntegrationInpu
 // SetIntegrationMethod sets the IntegrationMethod field's value.
 func (s *CreateIntegrationInput) SetIntegrationMethod(v string) *CreateIntegrationInput {
 	s.IntegrationMethod = &v
+	return s
+}
+
+// SetIntegrationSubtype sets the IntegrationSubtype field's value.
+func (s *CreateIntegrationInput) SetIntegrationSubtype(v string) *CreateIntegrationInput {
+	s.IntegrationSubtype = &v
 	return s
 }
 
@@ -7918,6 +8033,9 @@ type CreateIntegrationOutput struct {
 	// for more information.
 	IntegrationResponseSelectionExpression *string `locationName:"integrationResponseSelectionExpression" type:"string"`
 
+	// A string with a length between [1-128].
+	IntegrationSubtype *string `locationName:"integrationSubtype" type:"string"`
+
 	// Represents an API method integration type.
 	IntegrationType *string `locationName:"integrationType" type:"string" enum:"IntegrationType"`
 
@@ -7953,7 +8071,7 @@ type CreateIntegrationOutput struct {
 	// for more information.
 	TemplateSelectionExpression *string `locationName:"templateSelectionExpression" type:"string"`
 
-	// An integer with a value between [50-29000].
+	// An integer with a value between [50-30000].
 	TimeoutInMillis *int64 `locationName:"timeoutInMillis" min:"50" type:"integer"`
 
 	// The TLS configuration for a private integration. If you specify a TLS configuration,
@@ -8023,6 +8141,12 @@ func (s *CreateIntegrationOutput) SetIntegrationMethod(v string) *CreateIntegrat
 // SetIntegrationResponseSelectionExpression sets the IntegrationResponseSelectionExpression field's value.
 func (s *CreateIntegrationOutput) SetIntegrationResponseSelectionExpression(v string) *CreateIntegrationOutput {
 	s.IntegrationResponseSelectionExpression = &v
+	return s
+}
+
+// SetIntegrationSubtype sets the IntegrationSubtype field's value.
+func (s *CreateIntegrationOutput) SetIntegrationSubtype(v string) *CreateIntegrationOutput {
+	s.IntegrationSubtype = &v
 	return s
 }
 
@@ -10650,6 +10774,121 @@ func (s *DomainNameConfiguration) SetSecurityPolicy(v string) *DomainNameConfigu
 	return s
 }
 
+type ExportApiInput struct {
+	_ struct{} `type:"structure"`
+
+	// ApiId is a required field
+	ApiId *string `location:"uri" locationName:"apiId" type:"string" required:"true"`
+
+	ExportVersion *string `location:"querystring" locationName:"exportVersion" type:"string"`
+
+	IncludeExtensions *bool `location:"querystring" locationName:"includeExtensions" type:"boolean"`
+
+	// OutputType is a required field
+	OutputType *string `location:"querystring" locationName:"outputType" type:"string" required:"true"`
+
+	// Specification is a required field
+	Specification *string `location:"uri" locationName:"specification" type:"string" required:"true"`
+
+	StageName *string `location:"querystring" locationName:"stageName" type:"string"`
+}
+
+// String returns the string representation
+func (s ExportApiInput) String() string {
+	return awsutil.Prettify(s)
+}
+
+// GoString returns the string representation
+func (s ExportApiInput) GoString() string {
+	return s.String()
+}
+
+// Validate inspects the fields of the type to determine if they are valid.
+func (s *ExportApiInput) Validate() error {
+	invalidParams := request.ErrInvalidParams{Context: "ExportApiInput"}
+	if s.ApiId == nil {
+		invalidParams.Add(request.NewErrParamRequired("ApiId"))
+	}
+	if s.ApiId != nil && len(*s.ApiId) < 1 {
+		invalidParams.Add(request.NewErrParamMinLen("ApiId", 1))
+	}
+	if s.OutputType == nil {
+		invalidParams.Add(request.NewErrParamRequired("OutputType"))
+	}
+	if s.Specification == nil {
+		invalidParams.Add(request.NewErrParamRequired("Specification"))
+	}
+	if s.Specification != nil && len(*s.Specification) < 1 {
+		invalidParams.Add(request.NewErrParamMinLen("Specification", 1))
+	}
+
+	if invalidParams.Len() > 0 {
+		return invalidParams
+	}
+	return nil
+}
+
+// SetApiId sets the ApiId field's value.
+func (s *ExportApiInput) SetApiId(v string) *ExportApiInput {
+	s.ApiId = &v
+	return s
+}
+
+// SetExportVersion sets the ExportVersion field's value.
+func (s *ExportApiInput) SetExportVersion(v string) *ExportApiInput {
+	s.ExportVersion = &v
+	return s
+}
+
+// SetIncludeExtensions sets the IncludeExtensions field's value.
+func (s *ExportApiInput) SetIncludeExtensions(v bool) *ExportApiInput {
+	s.IncludeExtensions = &v
+	return s
+}
+
+// SetOutputType sets the OutputType field's value.
+func (s *ExportApiInput) SetOutputType(v string) *ExportApiInput {
+	s.OutputType = &v
+	return s
+}
+
+// SetSpecification sets the Specification field's value.
+func (s *ExportApiInput) SetSpecification(v string) *ExportApiInput {
+	s.Specification = &v
+	return s
+}
+
+// SetStageName sets the StageName field's value.
+func (s *ExportApiInput) SetStageName(v string) *ExportApiInput {
+	s.StageName = &v
+	return s
+}
+
+type ExportApiOutput struct {
+	_ struct{} `type:"structure" payload:"Body"`
+
+	// Represents an exported definition of an API in a particular output format,
+	// for example, YAML. The API is serialized to the requested specification,
+	// for example, OpenAPI 3.0.
+	Body []byte `locationName:"body" type:"blob"`
+}
+
+// String returns the string representation
+func (s ExportApiOutput) String() string {
+	return awsutil.Prettify(s)
+}
+
+// GoString returns the string representation
+func (s ExportApiOutput) GoString() string {
+	return s.String()
+}
+
+// SetBody sets the Body field's value.
+func (s *ExportApiOutput) SetBody(v []byte) *ExportApiOutput {
+	s.Body = v
+	return s
+}
+
 type GetApiInput struct {
 	_ struct{} `type:"structure"`
 
@@ -10889,6 +11128,8 @@ type GetApiOutput struct {
 
 	ApiEndpoint *string `locationName:"apiEndpoint" type:"string"`
 
+	ApiGatewayManaged *bool `locationName:"apiGatewayManaged" type:"boolean"`
+
 	// The identifier.
 	ApiId *string `locationName:"apiId" type:"string"`
 
@@ -10944,6 +11185,12 @@ func (s GetApiOutput) GoString() string {
 // SetApiEndpoint sets the ApiEndpoint field's value.
 func (s *GetApiOutput) SetApiEndpoint(v string) *GetApiOutput {
 	s.ApiEndpoint = &v
+	return s
+}
+
+// SetApiGatewayManaged sets the ApiGatewayManaged field's value.
+func (s *GetApiOutput) SetApiGatewayManaged(v bool) *GetApiOutput {
+	s.ApiGatewayManaged = &v
 	return s
 }
 
@@ -11783,6 +12030,9 @@ type GetIntegrationOutput struct {
 	// for more information.
 	IntegrationResponseSelectionExpression *string `locationName:"integrationResponseSelectionExpression" type:"string"`
 
+	// A string with a length between [1-128].
+	IntegrationSubtype *string `locationName:"integrationSubtype" type:"string"`
+
 	// Represents an API method integration type.
 	IntegrationType *string `locationName:"integrationType" type:"string" enum:"IntegrationType"`
 
@@ -11818,7 +12068,7 @@ type GetIntegrationOutput struct {
 	// for more information.
 	TemplateSelectionExpression *string `locationName:"templateSelectionExpression" type:"string"`
 
-	// An integer with a value between [50-29000].
+	// An integer with a value between [50-30000].
 	TimeoutInMillis *int64 `locationName:"timeoutInMillis" min:"50" type:"integer"`
 
 	// The TLS configuration for a private integration. If you specify a TLS configuration,
@@ -11888,6 +12138,12 @@ func (s *GetIntegrationOutput) SetIntegrationMethod(v string) *GetIntegrationOut
 // SetIntegrationResponseSelectionExpression sets the IntegrationResponseSelectionExpression field's value.
 func (s *GetIntegrationOutput) SetIntegrationResponseSelectionExpression(v string) *GetIntegrationOutput {
 	s.IntegrationResponseSelectionExpression = &v
+	return s
+}
+
+// SetIntegrationSubtype sets the IntegrationSubtype field's value.
+func (s *GetIntegrationOutput) SetIntegrationSubtype(v string) *GetIntegrationOutput {
+	s.IntegrationSubtype = &v
 	return s
 }
 
@@ -13678,6 +13934,8 @@ type ImportApiOutput struct {
 
 	ApiEndpoint *string `locationName:"apiEndpoint" type:"string"`
 
+	ApiGatewayManaged *bool `locationName:"apiGatewayManaged" type:"boolean"`
+
 	// The identifier.
 	ApiId *string `locationName:"apiId" type:"string"`
 
@@ -13733,6 +13991,12 @@ func (s ImportApiOutput) GoString() string {
 // SetApiEndpoint sets the ApiEndpoint field's value.
 func (s *ImportApiOutput) SetApiEndpoint(v string) *ImportApiOutput {
 	s.ApiEndpoint = &v
+	return s
+}
+
+// SetApiGatewayManaged sets the ApiGatewayManaged field's value.
+func (s *ImportApiOutput) SetApiGatewayManaged(v bool) *ImportApiOutput {
+	s.ApiGatewayManaged = &v
 	return s
 }
 
@@ -13868,6 +14132,10 @@ type Integration struct {
 	// only for WebSocket APIs. See Integration Response Selection Expressions (https://docs.aws.amazon.com/apigateway/latest/developerguide/apigateway-websocket-api-selection-expressions.html#apigateway-websocket-api-integration-response-selection-expressions).
 	IntegrationResponseSelectionExpression *string `locationName:"integrationResponseSelectionExpression" type:"string"`
 
+	// Supported only for HTTP API AWS_PROXY integrations. Specifies the AWS service
+	// action to invoke. To learn more, see Integration subtype reference (https://docs.aws.amazon.com/apigateway/latest/developerguide/http-api-develop-integrations-aws-services-reference.html).
+	IntegrationSubtype *string `locationName:"integrationSubtype" type:"string"`
+
 	// The integration type of an integration. One of the following:
 	//
 	// AWS: for integrating the route or method request with an AWS service action,
@@ -13876,9 +14144,9 @@ type Integration struct {
 	// AWS service action, this is known as AWS integration. Supported only for
 	// WebSocket APIs.
 	//
-	// AWS_PROXY: for integrating the route or method request with the Lambda function-invoking
-	// action with the client request passed through as-is. This integration is
-	// also referred to as Lambda proxy integration.
+	// AWS_PROXY: for integrating the route or method request with a Lambda function
+	// or other AWS service action. This integration is also referred to as a Lambda
+	// proxy integration.
 	//
 	// HTTP: for integrating the route or method request with an HTTP endpoint.
 	// This integration is also referred to as the HTTP custom integration. Supported
@@ -13900,7 +14168,7 @@ type Integration struct {
 	// Balancer listener, Network Load Balancer listener, or AWS Cloud Map service.
 	// If you specify the ARN of an AWS Cloud Map service, API Gateway uses DiscoverInstances
 	// to identify resources. You can use query parameters to target specific resources.
-	// To learn more, see DiscoverInstances (https://alpha-docs-aws.amazon.com/cloud-map/latest/api/API_DiscoverInstances.html).
+	// To learn more, see DiscoverInstances (https://docs.aws.amazon.com/cloud-map/latest/api/API_DiscoverInstances.html).
 	// For private integrations, all resources must be owned by the same AWS account.
 	IntegrationUri *string `locationName:"integrationUri" type:"string"`
 
@@ -13926,14 +14194,20 @@ type Integration struct {
 	// HTTP APIs.
 	PayloadFormatVersion *string `locationName:"payloadFormatVersion" type:"string"`
 
-	// A key-value map specifying request parameters that are passed from the method
-	// request to the backend. The key is an integration request parameter name
-	// and the associated value is a method request parameter value or static value
-	// that must be enclosed within single quotes and pre-encoded as required by
-	// the backend. The method request parameter value must match the pattern of
-	// method.request.{location}.{name} , where {location} is querystring, path,
-	// or header; and {name} must be a valid and unique method request parameter
-	// name. Supported only for WebSocket APIs.
+	// For WebSocket APIs, a key-value map specifying request parameters that are
+	// passed from the method request to the backend. The key is an integration
+	// request parameter name and the associated value is a method request parameter
+	// value or static value that must be enclosed within single quotes and pre-encoded
+	// as required by the backend. The method request parameter value must match
+	// the pattern of method.request.{location}.{name} , where {location} is querystring,
+	// path, or header; and {name} must be a valid and unique method request parameter
+	// name.
+	//
+	// For HTTP APIs, request parameters are a key-value map specifying parameters
+	// that are passed to AWS_PROXY integrations with a specified integrationSubtype.
+	// You can provide static values, or map request data, stage variables, or context
+	// variables that are evaluated at runtime. To learn more, see Working with
+	// AWS service integrations for HTTP APIs (https://docs.aws.amazon.com/apigateway/latest/developerguide/http-api-develop-integrations-aws-services.html).
 	RequestParameters map[string]*string `locationName:"requestParameters" type:"map"`
 
 	// Represents a map of Velocity templates that are applied on the request payload
@@ -13946,9 +14220,9 @@ type Integration struct {
 	// WebSocket APIs.
 	TemplateSelectionExpression *string `locationName:"templateSelectionExpression" type:"string"`
 
-	// Custom timeout between 50 and 29,000 milliseconds. The default value is 29,000
-	// milliseconds or 29 seconds for WebSocket APIs. The default value is 5,000
-	// milliseconds, or 5 seconds for HTTP APIs.
+	// Custom timeout between 50 and 29,000 milliseconds for WebSocket APIs and
+	// between 50 and 30,000 milliseconds for HTTP APIs. The default timeout is
+	// 29 seconds for WebSocket APIs and 30 seconds for HTTP APIs.
 	TimeoutInMillis *int64 `locationName:"timeoutInMillis" min:"50" type:"integer"`
 
 	// The TLS configuration for a private integration. If you specify a TLS configuration,
@@ -14018,6 +14292,12 @@ func (s *Integration) SetIntegrationMethod(v string) *Integration {
 // SetIntegrationResponseSelectionExpression sets the IntegrationResponseSelectionExpression field's value.
 func (s *Integration) SetIntegrationResponseSelectionExpression(v string) *Integration {
 	s.IntegrationResponseSelectionExpression = &v
+	return s
+}
+
+// SetIntegrationSubtype sets the IntegrationSubtype field's value.
+func (s *Integration) SetIntegrationSubtype(v string) *Integration {
+	s.IntegrationSubtype = &v
 	return s
 }
 
@@ -14274,8 +14554,8 @@ func (s *Model) SetSchema(v string) *Model {
 // The resource specified in the request was not found. See the message field
 // for more information.
 type NotFoundException struct {
-	_            struct{} `type:"structure"`
-	respMetadata protocol.ResponseMetadata
+	_            struct{}                  `type:"structure"`
+	RespMetadata protocol.ResponseMetadata `json:"-" xml:"-"`
 
 	// Describes the error encountered.
 	Message_ *string `locationName:"message" type:"string"`
@@ -14296,17 +14576,17 @@ func (s NotFoundException) GoString() string {
 
 func newErrorNotFoundException(v protocol.ResponseMetadata) error {
 	return &NotFoundException{
-		respMetadata: v,
+		RespMetadata: v,
 	}
 }
 
 // Code returns the exception type name.
-func (s NotFoundException) Code() string {
+func (s *NotFoundException) Code() string {
 	return "NotFoundException"
 }
 
 // Message returns the exception's message.
-func (s NotFoundException) Message() string {
+func (s *NotFoundException) Message() string {
 	if s.Message_ != nil {
 		return *s.Message_
 	}
@@ -14314,22 +14594,22 @@ func (s NotFoundException) Message() string {
 }
 
 // OrigErr always returns nil, satisfies awserr.Error interface.
-func (s NotFoundException) OrigErr() error {
+func (s *NotFoundException) OrigErr() error {
 	return nil
 }
 
-func (s NotFoundException) Error() string {
+func (s *NotFoundException) Error() string {
 	return fmt.Sprintf("%s: %s\n%s", s.Code(), s.Message(), s.String())
 }
 
 // Status code returns the HTTP status code for the request's response error.
-func (s NotFoundException) StatusCode() int {
-	return s.respMetadata.StatusCode
+func (s *NotFoundException) StatusCode() int {
+	return s.RespMetadata.StatusCode
 }
 
 // RequestID returns the service's response RequestID for request.
-func (s NotFoundException) RequestID() string {
-	return s.respMetadata.RequestID
+func (s *NotFoundException) RequestID() string {
+	return s.RespMetadata.RequestID
 }
 
 // Validation constraints imposed on parameters of a request (path, query string,
@@ -14429,6 +14709,8 @@ type ReimportApiOutput struct {
 
 	ApiEndpoint *string `locationName:"apiEndpoint" type:"string"`
 
+	ApiGatewayManaged *bool `locationName:"apiGatewayManaged" type:"boolean"`
+
 	// The identifier.
 	ApiId *string `locationName:"apiId" type:"string"`
 
@@ -14484,6 +14766,12 @@ func (s ReimportApiOutput) GoString() string {
 // SetApiEndpoint sets the ApiEndpoint field's value.
 func (s *ReimportApiOutput) SetApiEndpoint(v string) *ReimportApiOutput {
 	s.ApiEndpoint = &v
+	return s
+}
+
+// SetApiGatewayManaged sets the ApiGatewayManaged field's value.
+func (s *ReimportApiOutput) SetApiGatewayManaged(v bool) *ReimportApiOutput {
+	s.ApiGatewayManaged = &v
 	return s
 }
 
@@ -15113,8 +15401,8 @@ func (s *TlsConfigInput) SetServerNameToVerify(v string) *TlsConfigInput {
 
 // A limit has been exceeded. See the accompanying error message for details.
 type TooManyRequestsException struct {
-	_            struct{} `type:"structure"`
-	respMetadata protocol.ResponseMetadata
+	_            struct{}                  `type:"structure"`
+	RespMetadata protocol.ResponseMetadata `json:"-" xml:"-"`
 
 	LimitType *string `locationName:"limitType" type:"string"`
 
@@ -15133,17 +15421,17 @@ func (s TooManyRequestsException) GoString() string {
 
 func newErrorTooManyRequestsException(v protocol.ResponseMetadata) error {
 	return &TooManyRequestsException{
-		respMetadata: v,
+		RespMetadata: v,
 	}
 }
 
 // Code returns the exception type name.
-func (s TooManyRequestsException) Code() string {
+func (s *TooManyRequestsException) Code() string {
 	return "TooManyRequestsException"
 }
 
 // Message returns the exception's message.
-func (s TooManyRequestsException) Message() string {
+func (s *TooManyRequestsException) Message() string {
 	if s.Message_ != nil {
 		return *s.Message_
 	}
@@ -15151,22 +15439,22 @@ func (s TooManyRequestsException) Message() string {
 }
 
 // OrigErr always returns nil, satisfies awserr.Error interface.
-func (s TooManyRequestsException) OrigErr() error {
+func (s *TooManyRequestsException) OrigErr() error {
 	return nil
 }
 
-func (s TooManyRequestsException) Error() string {
+func (s *TooManyRequestsException) Error() string {
 	return fmt.Sprintf("%s: %s\n%s", s.Code(), s.Message(), s.String())
 }
 
 // Status code returns the HTTP status code for the request's response error.
-func (s TooManyRequestsException) StatusCode() int {
-	return s.respMetadata.StatusCode
+func (s *TooManyRequestsException) StatusCode() int {
+	return s.RespMetadata.StatusCode
 }
 
 // RequestID returns the service's response RequestID for request.
-func (s TooManyRequestsException) RequestID() string {
-	return s.respMetadata.RequestID
+func (s *TooManyRequestsException) RequestID() string {
+	return s.RespMetadata.RequestID
 }
 
 type UntagResourceInput struct {
@@ -15526,6 +15814,8 @@ type UpdateApiOutput struct {
 
 	ApiEndpoint *string `locationName:"apiEndpoint" type:"string"`
 
+	ApiGatewayManaged *bool `locationName:"apiGatewayManaged" type:"boolean"`
+
 	// The identifier.
 	ApiId *string `locationName:"apiId" type:"string"`
 
@@ -15581,6 +15871,12 @@ func (s UpdateApiOutput) GoString() string {
 // SetApiEndpoint sets the ApiEndpoint field's value.
 func (s *UpdateApiOutput) SetApiEndpoint(v string) *UpdateApiOutput {
 	s.ApiEndpoint = &v
+	return s
+}
+
+// SetApiGatewayManaged sets the ApiGatewayManaged field's value.
+func (s *UpdateApiOutput) SetApiGatewayManaged(v bool) *UpdateApiOutput {
+	s.ApiGatewayManaged = &v
 	return s
 }
 
@@ -16169,6 +16465,9 @@ type UpdateIntegrationInput struct {
 	// A string with a length between [1-64].
 	IntegrationMethod *string `locationName:"integrationMethod" type:"string"`
 
+	// A string with a length between [1-128].
+	IntegrationSubtype *string `locationName:"integrationSubtype" type:"string"`
+
 	// Represents an API method integration type.
 	IntegrationType *string `locationName:"integrationType" type:"string" enum:"IntegrationType"`
 
@@ -16204,7 +16503,7 @@ type UpdateIntegrationInput struct {
 	// for more information.
 	TemplateSelectionExpression *string `locationName:"templateSelectionExpression" type:"string"`
 
-	// An integer with a value between [50-29000].
+	// An integer with a value between [50-30000].
 	TimeoutInMillis *int64 `locationName:"timeoutInMillis" min:"50" type:"integer"`
 
 	// The TLS configuration for a private integration. If you specify a TLS configuration,
@@ -16296,6 +16595,12 @@ func (s *UpdateIntegrationInput) SetIntegrationMethod(v string) *UpdateIntegrati
 	return s
 }
 
+// SetIntegrationSubtype sets the IntegrationSubtype field's value.
+func (s *UpdateIntegrationInput) SetIntegrationSubtype(v string) *UpdateIntegrationInput {
+	s.IntegrationSubtype = &v
+	return s
+}
+
 // SetIntegrationType sets the IntegrationType field's value.
 func (s *UpdateIntegrationInput) SetIntegrationType(v string) *UpdateIntegrationInput {
 	s.IntegrationType = &v
@@ -16382,6 +16687,9 @@ type UpdateIntegrationOutput struct {
 	// for more information.
 	IntegrationResponseSelectionExpression *string `locationName:"integrationResponseSelectionExpression" type:"string"`
 
+	// A string with a length between [1-128].
+	IntegrationSubtype *string `locationName:"integrationSubtype" type:"string"`
+
 	// Represents an API method integration type.
 	IntegrationType *string `locationName:"integrationType" type:"string" enum:"IntegrationType"`
 
@@ -16417,7 +16725,7 @@ type UpdateIntegrationOutput struct {
 	// for more information.
 	TemplateSelectionExpression *string `locationName:"templateSelectionExpression" type:"string"`
 
-	// An integer with a value between [50-29000].
+	// An integer with a value between [50-30000].
 	TimeoutInMillis *int64 `locationName:"timeoutInMillis" min:"50" type:"integer"`
 
 	// The TLS configuration for a private integration. If you specify a TLS configuration,
@@ -16487,6 +16795,12 @@ func (s *UpdateIntegrationOutput) SetIntegrationMethod(v string) *UpdateIntegrat
 // SetIntegrationResponseSelectionExpression sets the IntegrationResponseSelectionExpression field's value.
 func (s *UpdateIntegrationOutput) SetIntegrationResponseSelectionExpression(v string) *UpdateIntegrationOutput {
 	s.IntegrationResponseSelectionExpression = &v
+	return s
+}
+
+// SetIntegrationSubtype sets the IntegrationSubtype field's value.
+func (s *UpdateIntegrationOutput) SetIntegrationSubtype(v string) *UpdateIntegrationOutput {
+	s.IntegrationSubtype = &v
 	return s
 }
 
@@ -17926,6 +18240,16 @@ const (
 	AuthorizationTypeJwt = "JWT"
 )
 
+// AuthorizationType_Values returns all elements of the AuthorizationType enum
+func AuthorizationType_Values() []string {
+	return []string{
+		AuthorizationTypeNone,
+		AuthorizationTypeAwsIam,
+		AuthorizationTypeCustom,
+		AuthorizationTypeJwt,
+	}
+}
+
 // The authorizer type. For WebSocket APIs, specify REQUEST for a Lambda function
 // using incoming request parameters. For HTTP APIs, specify JWT to use JSON
 // Web Tokens.
@@ -17937,6 +18261,14 @@ const (
 	AuthorizerTypeJwt = "JWT"
 )
 
+// AuthorizerType_Values returns all elements of the AuthorizerType enum
+func AuthorizerType_Values() []string {
+	return []string{
+		AuthorizerTypeRequest,
+		AuthorizerTypeJwt,
+	}
+}
+
 // Represents a connection type.
 const (
 	// ConnectionTypeInternet is a ConnectionType enum value
@@ -17945,6 +18277,14 @@ const (
 	// ConnectionTypeVpcLink is a ConnectionType enum value
 	ConnectionTypeVpcLink = "VPC_LINK"
 )
+
+// ConnectionType_Values returns all elements of the ConnectionType enum
+func ConnectionType_Values() []string {
+	return []string{
+		ConnectionTypeInternet,
+		ConnectionTypeVpcLink,
+	}
+}
 
 // Specifies how to handle response payload content type conversions. Supported
 // only for WebSocket APIs.
@@ -17955,6 +18295,14 @@ const (
 	// ContentHandlingStrategyConvertToText is a ContentHandlingStrategy enum value
 	ContentHandlingStrategyConvertToText = "CONVERT_TO_TEXT"
 )
+
+// ContentHandlingStrategy_Values returns all elements of the ContentHandlingStrategy enum
+func ContentHandlingStrategy_Values() []string {
+	return []string{
+		ContentHandlingStrategyConvertToBinary,
+		ContentHandlingStrategyConvertToText,
+	}
+}
 
 // Represents a deployment status.
 const (
@@ -17968,6 +18316,15 @@ const (
 	DeploymentStatusDeployed = "DEPLOYED"
 )
 
+// DeploymentStatus_Values returns all elements of the DeploymentStatus enum
+func DeploymentStatus_Values() []string {
+	return []string{
+		DeploymentStatusPending,
+		DeploymentStatusFailed,
+		DeploymentStatusDeployed,
+	}
+}
+
 // The status of the domain name migration. The valid values are AVAILABLE and
 // UPDATING. If the status is UPDATING, the domain cannot be modified further
 // until the existing operation is complete. If it is AVAILABLE, the domain
@@ -17980,6 +18337,14 @@ const (
 	DomainNameStatusUpdating = "UPDATING"
 )
 
+// DomainNameStatus_Values returns all elements of the DomainNameStatus enum
+func DomainNameStatus_Values() []string {
+	return []string{
+		DomainNameStatusAvailable,
+		DomainNameStatusUpdating,
+	}
+}
+
 // Represents an endpoint type.
 const (
 	// EndpointTypeRegional is a EndpointType enum value
@@ -17988,6 +18353,14 @@ const (
 	// EndpointTypeEdge is a EndpointType enum value
 	EndpointTypeEdge = "EDGE"
 )
+
+// EndpointType_Values returns all elements of the EndpointType enum
+func EndpointType_Values() []string {
+	return []string{
+		EndpointTypeRegional,
+		EndpointTypeEdge,
+	}
+}
 
 // Represents an API method integration type.
 const (
@@ -18007,6 +18380,17 @@ const (
 	IntegrationTypeAwsProxy = "AWS_PROXY"
 )
 
+// IntegrationType_Values returns all elements of the IntegrationType enum
+func IntegrationType_Values() []string {
+	return []string{
+		IntegrationTypeAws,
+		IntegrationTypeHttp,
+		IntegrationTypeMock,
+		IntegrationTypeHttpProxy,
+		IntegrationTypeAwsProxy,
+	}
+}
+
 // The logging level.
 const (
 	// LoggingLevelError is a LoggingLevel enum value
@@ -18018,6 +18402,15 @@ const (
 	// LoggingLevelOff is a LoggingLevel enum value
 	LoggingLevelOff = "OFF"
 )
+
+// LoggingLevel_Values returns all elements of the LoggingLevel enum
+func LoggingLevel_Values() []string {
+	return []string{
+		LoggingLevelError,
+		LoggingLevelInfo,
+		LoggingLevelOff,
+	}
+}
 
 // Represents passthrough behavior for an integration response. Supported only
 // for WebSocket APIs.
@@ -18032,6 +18425,15 @@ const (
 	PassthroughBehaviorWhenNoTemplates = "WHEN_NO_TEMPLATES"
 )
 
+// PassthroughBehavior_Values returns all elements of the PassthroughBehavior enum
+func PassthroughBehavior_Values() []string {
+	return []string{
+		PassthroughBehaviorWhenNoMatch,
+		PassthroughBehaviorNever,
+		PassthroughBehaviorWhenNoTemplates,
+	}
+}
+
 // Represents a protocol type.
 const (
 	// ProtocolTypeWebsocket is a ProtocolType enum value
@@ -18040,6 +18442,14 @@ const (
 	// ProtocolTypeHttp is a ProtocolType enum value
 	ProtocolTypeHttp = "HTTP"
 )
+
+// ProtocolType_Values returns all elements of the ProtocolType enum
+func ProtocolType_Values() []string {
+	return []string{
+		ProtocolTypeWebsocket,
+		ProtocolTypeHttp,
+	}
+}
 
 // The Transport Layer Security (TLS) version of the security policy for this
 // domain name. The valid values are TLS_1_0 and TLS_1_2.
@@ -18050,6 +18460,14 @@ const (
 	// SecurityPolicyTls12 is a SecurityPolicy enum value
 	SecurityPolicyTls12 = "TLS_1_2"
 )
+
+// SecurityPolicy_Values returns all elements of the SecurityPolicy enum
+func SecurityPolicy_Values() []string {
+	return []string{
+		SecurityPolicyTls10,
+		SecurityPolicyTls12,
+	}
+}
 
 // The status of the VPC link.
 const (
@@ -18069,8 +18487,26 @@ const (
 	VpcLinkStatusInactive = "INACTIVE"
 )
 
+// VpcLinkStatus_Values returns all elements of the VpcLinkStatus enum
+func VpcLinkStatus_Values() []string {
+	return []string{
+		VpcLinkStatusPending,
+		VpcLinkStatusAvailable,
+		VpcLinkStatusDeleting,
+		VpcLinkStatusFailed,
+		VpcLinkStatusInactive,
+	}
+}
+
 // The version of the VPC link.
 const (
 	// VpcLinkVersionV2 is a VpcLinkVersion enum value
 	VpcLinkVersionV2 = "V2"
 )
+
+// VpcLinkVersion_Values returns all elements of the VpcLinkVersion enum
+func VpcLinkVersion_Values() []string {
+	return []string{
+		VpcLinkVersionV2,
+	}
+}

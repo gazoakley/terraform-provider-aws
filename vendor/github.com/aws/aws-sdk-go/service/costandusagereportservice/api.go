@@ -540,8 +540,8 @@ func (s *DescribeReportDefinitionsOutput) SetReportDefinitions(v []*ReportDefini
 // A report with the specified name already exists in the account. Specify a
 // different report name.
 type DuplicateReportNameException struct {
-	_            struct{} `type:"structure"`
-	respMetadata protocol.ResponseMetadata
+	_            struct{}                  `type:"structure"`
+	RespMetadata protocol.ResponseMetadata `json:"-" xml:"-"`
 
 	// A message to show the detail of the exception.
 	Message_ *string `locationName:"Message" type:"string"`
@@ -559,17 +559,17 @@ func (s DuplicateReportNameException) GoString() string {
 
 func newErrorDuplicateReportNameException(v protocol.ResponseMetadata) error {
 	return &DuplicateReportNameException{
-		respMetadata: v,
+		RespMetadata: v,
 	}
 }
 
 // Code returns the exception type name.
-func (s DuplicateReportNameException) Code() string {
+func (s *DuplicateReportNameException) Code() string {
 	return "DuplicateReportNameException"
 }
 
 // Message returns the exception's message.
-func (s DuplicateReportNameException) Message() string {
+func (s *DuplicateReportNameException) Message() string {
 	if s.Message_ != nil {
 		return *s.Message_
 	}
@@ -577,29 +577,29 @@ func (s DuplicateReportNameException) Message() string {
 }
 
 // OrigErr always returns nil, satisfies awserr.Error interface.
-func (s DuplicateReportNameException) OrigErr() error {
+func (s *DuplicateReportNameException) OrigErr() error {
 	return nil
 }
 
-func (s DuplicateReportNameException) Error() string {
+func (s *DuplicateReportNameException) Error() string {
 	return fmt.Sprintf("%s: %s", s.Code(), s.Message())
 }
 
 // Status code returns the HTTP status code for the request's response error.
-func (s DuplicateReportNameException) StatusCode() int {
-	return s.respMetadata.StatusCode
+func (s *DuplicateReportNameException) StatusCode() int {
+	return s.RespMetadata.StatusCode
 }
 
 // RequestID returns the service's response RequestID for request.
-func (s DuplicateReportNameException) RequestID() string {
-	return s.respMetadata.RequestID
+func (s *DuplicateReportNameException) RequestID() string {
+	return s.RespMetadata.RequestID
 }
 
 // An error on the server occurred during the processing of your request. Try
 // again later.
 type InternalErrorException struct {
-	_            struct{} `type:"structure"`
-	respMetadata protocol.ResponseMetadata
+	_            struct{}                  `type:"structure"`
+	RespMetadata protocol.ResponseMetadata `json:"-" xml:"-"`
 
 	// A message to show the detail of the exception.
 	Message_ *string `locationName:"Message" type:"string"`
@@ -617,17 +617,17 @@ func (s InternalErrorException) GoString() string {
 
 func newErrorInternalErrorException(v protocol.ResponseMetadata) error {
 	return &InternalErrorException{
-		respMetadata: v,
+		RespMetadata: v,
 	}
 }
 
 // Code returns the exception type name.
-func (s InternalErrorException) Code() string {
+func (s *InternalErrorException) Code() string {
 	return "InternalErrorException"
 }
 
 // Message returns the exception's message.
-func (s InternalErrorException) Message() string {
+func (s *InternalErrorException) Message() string {
 	if s.Message_ != nil {
 		return *s.Message_
 	}
@@ -635,22 +635,22 @@ func (s InternalErrorException) Message() string {
 }
 
 // OrigErr always returns nil, satisfies awserr.Error interface.
-func (s InternalErrorException) OrigErr() error {
+func (s *InternalErrorException) OrigErr() error {
 	return nil
 }
 
-func (s InternalErrorException) Error() string {
+func (s *InternalErrorException) Error() string {
 	return fmt.Sprintf("%s: %s", s.Code(), s.Message())
 }
 
 // Status code returns the HTTP status code for the request's response error.
-func (s InternalErrorException) StatusCode() int {
-	return s.respMetadata.StatusCode
+func (s *InternalErrorException) StatusCode() int {
+	return s.RespMetadata.StatusCode
 }
 
 // RequestID returns the service's response RequestID for request.
-func (s InternalErrorException) RequestID() string {
-	return s.respMetadata.RequestID
+func (s *InternalErrorException) RequestID() string {
+	return s.RespMetadata.RequestID
 }
 
 type ModifyReportDefinitionInput struct {
@@ -964,8 +964,8 @@ func (s *ReportDefinition) SetTimeUnit(v string) *ReportDefinition {
 // This account already has five reports defined. To define a new report, you
 // must delete an existing report.
 type ReportLimitReachedException struct {
-	_            struct{} `type:"structure"`
-	respMetadata protocol.ResponseMetadata
+	_            struct{}                  `type:"structure"`
+	RespMetadata protocol.ResponseMetadata `json:"-" xml:"-"`
 
 	// A message to show the detail of the exception.
 	Message_ *string `locationName:"Message" type:"string"`
@@ -983,17 +983,17 @@ func (s ReportLimitReachedException) GoString() string {
 
 func newErrorReportLimitReachedException(v protocol.ResponseMetadata) error {
 	return &ReportLimitReachedException{
-		respMetadata: v,
+		RespMetadata: v,
 	}
 }
 
 // Code returns the exception type name.
-func (s ReportLimitReachedException) Code() string {
+func (s *ReportLimitReachedException) Code() string {
 	return "ReportLimitReachedException"
 }
 
 // Message returns the exception's message.
-func (s ReportLimitReachedException) Message() string {
+func (s *ReportLimitReachedException) Message() string {
 	if s.Message_ != nil {
 		return *s.Message_
 	}
@@ -1001,28 +1001,28 @@ func (s ReportLimitReachedException) Message() string {
 }
 
 // OrigErr always returns nil, satisfies awserr.Error interface.
-func (s ReportLimitReachedException) OrigErr() error {
+func (s *ReportLimitReachedException) OrigErr() error {
 	return nil
 }
 
-func (s ReportLimitReachedException) Error() string {
+func (s *ReportLimitReachedException) Error() string {
 	return fmt.Sprintf("%s: %s", s.Code(), s.Message())
 }
 
 // Status code returns the HTTP status code for the request's response error.
-func (s ReportLimitReachedException) StatusCode() int {
-	return s.respMetadata.StatusCode
+func (s *ReportLimitReachedException) StatusCode() int {
+	return s.RespMetadata.StatusCode
 }
 
 // RequestID returns the service's response RequestID for request.
-func (s ReportLimitReachedException) RequestID() string {
-	return s.respMetadata.RequestID
+func (s *ReportLimitReachedException) RequestID() string {
+	return s.RespMetadata.RequestID
 }
 
 // The input fails to satisfy the constraints specified by an AWS service.
 type ValidationException struct {
-	_            struct{} `type:"structure"`
-	respMetadata protocol.ResponseMetadata
+	_            struct{}                  `type:"structure"`
+	RespMetadata protocol.ResponseMetadata `json:"-" xml:"-"`
 
 	// A message to show the detail of the exception.
 	Message_ *string `locationName:"Message" type:"string"`
@@ -1040,17 +1040,17 @@ func (s ValidationException) GoString() string {
 
 func newErrorValidationException(v protocol.ResponseMetadata) error {
 	return &ValidationException{
-		respMetadata: v,
+		RespMetadata: v,
 	}
 }
 
 // Code returns the exception type name.
-func (s ValidationException) Code() string {
+func (s *ValidationException) Code() string {
 	return "ValidationException"
 }
 
 // Message returns the exception's message.
-func (s ValidationException) Message() string {
+func (s *ValidationException) Message() string {
 	if s.Message_ != nil {
 		return *s.Message_
 	}
@@ -1058,22 +1058,22 @@ func (s ValidationException) Message() string {
 }
 
 // OrigErr always returns nil, satisfies awserr.Error interface.
-func (s ValidationException) OrigErr() error {
+func (s *ValidationException) OrigErr() error {
 	return nil
 }
 
-func (s ValidationException) Error() string {
+func (s *ValidationException) Error() string {
 	return fmt.Sprintf("%s: %s", s.Code(), s.Message())
 }
 
 // Status code returns the HTTP status code for the request's response error.
-func (s ValidationException) StatusCode() int {
-	return s.respMetadata.StatusCode
+func (s *ValidationException) StatusCode() int {
+	return s.RespMetadata.StatusCode
 }
 
 // RequestID returns the service's response RequestID for request.
-func (s ValidationException) RequestID() string {
-	return s.respMetadata.RequestID
+func (s *ValidationException) RequestID() string {
+	return s.RespMetadata.RequestID
 }
 
 // The region of the S3 bucket that AWS delivers the report into.
@@ -1112,6 +1112,23 @@ const (
 	AWSRegionApEast1 = "ap-east-1"
 )
 
+// AWSRegion_Values returns all elements of the AWSRegion enum
+func AWSRegion_Values() []string {
+	return []string{
+		AWSRegionUsEast1,
+		AWSRegionUsWest1,
+		AWSRegionUsWest2,
+		AWSRegionEuCentral1,
+		AWSRegionEuWest1,
+		AWSRegionApSoutheast1,
+		AWSRegionApSoutheast2,
+		AWSRegionApNortheast1,
+		AWSRegionEuNorth1,
+		AWSRegionApNortheast3,
+		AWSRegionApEast1,
+	}
+}
+
 // The types of manifest that you want AWS to create for this report.
 const (
 	// AdditionalArtifactRedshift is a AdditionalArtifact enum value
@@ -1123,6 +1140,15 @@ const (
 	// AdditionalArtifactAthena is a AdditionalArtifact enum value
 	AdditionalArtifactAthena = "ATHENA"
 )
+
+// AdditionalArtifact_Values returns all elements of the AdditionalArtifact enum
+func AdditionalArtifact_Values() []string {
+	return []string{
+		AdditionalArtifactRedshift,
+		AdditionalArtifactQuicksight,
+		AdditionalArtifactAthena,
+	}
+}
 
 // The compression format that AWS uses for the report.
 const (
@@ -1136,6 +1162,15 @@ const (
 	CompressionFormatParquet = "Parquet"
 )
 
+// CompressionFormat_Values returns all elements of the CompressionFormat enum
+func CompressionFormat_Values() []string {
+	return []string{
+		CompressionFormatZip,
+		CompressionFormatGzip,
+		CompressionFormatParquet,
+	}
+}
+
 // The format that AWS saves the report in.
 const (
 	// ReportFormatTextOrcsv is a ReportFormat enum value
@@ -1145,6 +1180,14 @@ const (
 	ReportFormatParquet = "Parquet"
 )
 
+// ReportFormat_Values returns all elements of the ReportFormat enum
+func ReportFormat_Values() []string {
+	return []string{
+		ReportFormatTextOrcsv,
+		ReportFormatParquet,
+	}
+}
+
 const (
 	// ReportVersioningCreateNewReport is a ReportVersioning enum value
 	ReportVersioningCreateNewReport = "CREATE_NEW_REPORT"
@@ -1153,11 +1196,26 @@ const (
 	ReportVersioningOverwriteReport = "OVERWRITE_REPORT"
 )
 
+// ReportVersioning_Values returns all elements of the ReportVersioning enum
+func ReportVersioning_Values() []string {
+	return []string{
+		ReportVersioningCreateNewReport,
+		ReportVersioningOverwriteReport,
+	}
+}
+
 // Whether or not AWS includes resource IDs in the report.
 const (
 	// SchemaElementResources is a SchemaElement enum value
 	SchemaElementResources = "RESOURCES"
 )
+
+// SchemaElement_Values returns all elements of the SchemaElement enum
+func SchemaElement_Values() []string {
+	return []string{
+		SchemaElementResources,
+	}
+}
 
 // The length of time covered by the report.
 const (
@@ -1167,3 +1225,11 @@ const (
 	// TimeUnitDaily is a TimeUnit enum value
 	TimeUnitDaily = "DAILY"
 )
+
+// TimeUnit_Values returns all elements of the TimeUnit enum
+func TimeUnit_Values() []string {
+	return []string{
+		TimeUnitHourly,
+		TimeUnitDaily,
+	}
+}
